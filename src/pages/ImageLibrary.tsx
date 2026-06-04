@@ -7,6 +7,7 @@ import {
   Filter,
   ImageOff,
   RefreshCw,
+  XCircle,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { Item, ITEM_TYPE_CONFIG, ItemType } from '@/types';
@@ -20,6 +21,7 @@ export const ImageLibrary: React.FC = () => {
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [editUrl, setEditUrl] = useState('');
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
+  const [copyFailed, setCopyFailed] = useState<string | null>(null);
 
   const filteredItems = items.filter((item) => {
     if (selectedActivity !== 'all' && item.activityId !== selectedActivity) return false;
@@ -31,13 +33,38 @@ export const ImageLibrary: React.FC = () => {
   const itemsWithImage = items.filter((item) => item.designUrl).length;
   const itemsWithoutImage = items.filter((item) => !item.designUrl).length;
 
+  const fallbackCopy = (text: string): boolean => {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '-9999px';
+    textarea.setAttribute('readonly', '');
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      const ok = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      return ok;
+    } catch {
+      document.body.removeChild(textarea);
+      return false;
+    }
+  };
+
   const copyToClipboard = async (url: string, itemId: string) => {
     try {
       await navigator.clipboard.writeText(url);
       setCopySuccess(itemId);
       setTimeout(() => setCopySuccess(null), 2000);
-    } catch (err) {
-      console.error('复制失败:', err);
+    } catch {
+      if (fallbackCopy(url)) {
+        setCopySuccess(itemId);
+        setTimeout(() => setCopySuccess(null), 2000);
+      } else {
+        setCopyFailed(itemId);
+        setTimeout(() => setCopyFailed(null), 3000);
+      }
     }
   };
 
@@ -216,6 +243,11 @@ export const ImageLibrary: React.FC = () => {
                             <>
                               <CheckCircle size={16} className="text-green-500" />
                               已复制
+                            </>
+                          ) : copyFailed === item.id ? (
+                            <>
+                              <XCircle size={16} className="text-red-500" />
+                              复制失败
                             </>
                           ) : (
                             <>
