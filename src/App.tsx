@@ -3,6 +3,7 @@ import { Navbar } from "@/components/Navbar";
 import { ActivityList } from "@/pages/ActivityList";
 import { ActivityDetail } from "@/pages/ActivityDetail";
 import { DataManagement } from "@/pages/DataManagement";
+import { ImageLibrary } from "@/pages/ImageLibrary";
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
           <Route path="/" element={<ActivityList />} />
           <Route path="/activity/:id" element={<ActivityDetail />} />
           <Route path="/data" element={<DataManagement />} />
+          <Route path="/images" element={<ImageLibrary />} />
         </Routes>
       </div>
     </Router>

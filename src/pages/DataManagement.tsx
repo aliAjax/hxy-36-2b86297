@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { Download, Upload, Trash2, FileJson, CheckCircle, AlertTriangle, Database } from 'lucide-react';
+import { Download, Upload, Trash2, FileJson, CheckCircle, AlertTriangle, Database, Image } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { Modal } from '@/components/Modal';
 import { downloadFile, readFileAsText, formatFileSize } from '@/utils/helpers';
 import { AppData } from '@/types';
+import { Link } from 'react-router-dom';
 
 export const DataManagement: React.FC = () => {
   const { activities, items, records, exportData, importData, clearAllData } = useAppStore();
@@ -128,6 +129,25 @@ export const DataManagement: React.FC = () => {
               <p className="text-lg font-bold text-gray-800">LocalStorage</p>
             </div>
           </div>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-pink-50 p-6 mb-6 hover:shadow-md transition-shadow">
+          <Link to="/images" className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-gradient-to-br from-pink-400 to-purple-400 rounded-2xl flex items-center justify-center shadow-lg shadow-pink-200">
+              <Image className="text-white" size={26} />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-gray-800 mb-1">物资图片库</h3>
+              <p className="text-gray-500 text-sm">
+                集中管理所有活动物资的设计图，支持复制链接和批量编辑
+              </p>
+            </div>
+            <div className="text-pink-500">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </Link>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
