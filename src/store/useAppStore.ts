@@ -4,6 +4,7 @@ import {
   Activity,
   Item,
   ClaimRecord,
+  PurchaseItem,
   AppData,
   ActivityStats,
   ConsumptionData,
@@ -17,6 +18,7 @@ interface AppState {
   activities: Activity[];
   items: Item[];
   records: ClaimRecord[];
+  purchaseItems: PurchaseItem[];
 
   addActivity: (data: Omit<Activity, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateActivity: (id: string, data: Partial<Activity>) => void;
@@ -36,6 +38,11 @@ interface AppState {
   };
   deleteRecord: (id: string) => void;
 
+  addPurchaseItem: (data: Omit<PurchaseItem, 'id' | 'createdAt'>) => void;
+  updatePurchaseItem: (id: string, data: Partial<PurchaseItem>) => void;
+  deletePurchaseItem: (id: string) => void;
+  convertPurchaseToItem: (purchaseId: string) => { success: boolean; item?: Item; error?: string };
+
   exportData: () => string;
   importData: (data: AppData) => { success: boolean; error?: string };
   clearAllData: () => void;
@@ -52,6 +59,7 @@ export const useAppStore = create<AppState>()(
       activities: [],
       items: [],
       records: [],
+      purchaseItems: [],
 
       addActivity: (data) => {
         const now = new Date().toISOString();
@@ -80,6 +88,7 @@ export const useAppStore = create<AppState>()(
           activities: state.activities.filter((a) => a.id !== id),
           items: state.items.filter((i) => i.activityId !== id),
           records: state.records.filter((r) => r.activityId !== id),
+          purchaseItems: state.purchaseItems.filter((p) => p.activityId !== id),
         }));
       },
 
@@ -157,12 +166,73 @@ export const useAppStore = create<AppState>()(
         }));
       },
 
+      addPurchaseItem: (data) => {
+        const newPurchaseItem: PurchaseItem = {
+          ...data,
+          id: generateId(),
+          createdAt: new Date().toISOString(),
+        };
+        set((state) => ({
+          purchaseItems: [...state.purchaseItems, newPurchaseItem],
+        }));
+      },
+
+      updatePurchaseItem: (id, data) => {
+        set((state) => ({
+          purchaseItems: state.purchaseItems.map((p) =>
+            p.id === id ? { ...p, ...data } : p
+          ),
+        }));
+      },
+
+      deletePurchaseItem: (id) => {
+        set((state) => ({
+          purchaseItems: state.purchaseItems.filter((p) => p.id !== id),
+        }));
+      },
+
+      convertPurchaseToItem: (purchaseId) => {
+        const state = get();
+        const purchaseItem = state.purchaseItems.find((p) => p.id === purchaseId);
+
+        if (!purchaseItem) {
+          return { success: false, error: '采购记录不存在' };
+        }
+
+        if (purchaseItem.status !== 'completed') {
+          return { success: false, error: '只有已完成的采购才能转为正式物资' };
+        }
+
+        const newItem: Item = {
+          id: generateId(),
+          activityId: purchaseItem.activityId,
+          name: purchaseItem.name,
+          type: purchaseItem.type,
+          designUrl: '',
+          budget: purchaseItem.budget,
+          supplier: purchaseItem.supplier,
+          totalStock: purchaseItem.expectedQuantity,
+          currentStock: purchaseItem.expectedQuantity,
+          distributionRule: '',
+          note: purchaseItem.note,
+          createdAt: new Date().toISOString(),
+        };
+
+        set((state) => ({
+          items: [...state.items, newItem],
+          purchaseItems: state.purchaseItems.filter((p) => p.id !== purchaseId),
+        }));
+
+        return { success: true, item: newItem };
+      },
+
       exportData: () => {
         const state = get();
         const exportObj: AppData = {
           activities: state.activities,
           items: state.items,
           records: state.records,
+          purchaseItems: state.purchaseItems,
         };
         return JSON.stringify(exportObj, null, 2);
       },
@@ -180,6 +250,7 @@ export const useAppStore = create<AppState>()(
             activities: data.activities,
             items: data.items,
             records: data.records,
+            purchaseItems: Array.isArray(data.purchaseItems) ? data.purchaseItems : [],
           });
           return { success: true };
         } catch (e) {
@@ -192,6 +263,7 @@ export const useAppStore = create<AppState>()(
           activities: [],
           items: [],
           records: [],
+          purchaseItems: [],
         });
       },
 

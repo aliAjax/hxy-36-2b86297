@@ -12,6 +12,8 @@ import {
   Trash2,
   Search,
   Filter,
+  ShoppingCart,
+  CheckCircle,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { StatsCard } from '@/components/StatsCard';
@@ -21,11 +23,13 @@ import { ClaimForm } from '@/components/ClaimForm';
 import { ClaimRecordItem } from '@/components/ClaimRecordItem';
 import { ConsumptionChart } from '@/components/ConsumptionChart';
 import { TypeDistributionChart } from '@/components/TypeDistributionChart';
+import { PurchaseItemForm } from '@/components/PurchaseItemForm';
+import { PurchaseItemCard } from '@/components/PurchaseItemCard';
 import { Modal } from '@/components/Modal';
 import { formatDate, cn } from '@/utils/helpers';
-import { Item, ACTIVITY_STATUS_CONFIG } from '@/types';
+import { Item, PurchaseItem, ACTIVITY_STATUS_CONFIG } from '@/types';
 
-type TabType = 'items' | 'records' | 'charts';
+type TabType = 'items' | 'records' | 'charts' | 'purchase';
 
 export const ActivityDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -34,10 +38,15 @@ export const ActivityDetail: React.FC = () => {
     activities,
     items,
     records,
+    purchaseItems,
     addItem,
     updateItem,
     deleteItem,
     deleteRecord,
+    addPurchaseItem,
+    updatePurchaseItem,
+    deletePurchaseItem,
+    convertPurchaseToItem,
     getActivityStats,
     getItemConsumptionData,
     getTypeDistributionData,
@@ -46,13 +55,20 @@ export const ActivityDetail: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('items');
   const [isItemFormOpen, setIsItemFormOpen] = useState(false);
   const [isClaimFormOpen, setIsClaimFormOpen] = useState(false);
+  const [isPurchaseFormOpen, setIsPurchaseFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [editingPurchaseItem, setEditingPurchaseItem] = useState<PurchaseItem | null>(null);
   const [deleteItemConfirm, setDeleteItemConfirm] = useState<string | null>(null);
   const [deleteRecordConfirm, setDeleteRecordConfirm] = useState<string | null>(null);
+  const [deletePurchaseConfirm, setDeletePurchaseConfirm] = useState<string | null>(null);
+  const [convertPurchaseConfirm, setConvertPurchaseConfirm] = useState<string | null>(null);
   const [itemSearchQuery, setItemSearchQuery] = useState('');
   const [recordSearchQuery, setRecordSearchQuery] = useState('');
+  const [purchaseSearchQuery, setPurchaseSearchQuery] = useState('');
   const [filterItemType, setFilterItemType] = useState<string>('all');
+  const [filterPurchaseStatus, setFilterPurchaseStatus] = useState<string>('all');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   const activity = activities.find((a) => a.id === id);
   const activityItems = useMemo(
@@ -62,6 +78,10 @@ export const ActivityDetail: React.FC = () => {
   const activityRecords = useMemo(
     () => records.filter((r) => r.activityId === id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [records, id]
+  );
+  const activityPurchaseItems = useMemo(
+    () => purchaseItems.filter((p) => p.activityId === id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [purchaseItems, id]
   );
   const stats = id ? getActivityStats(id) : null;
   const consumptionData = id ? getItemConsumptionData(id) : [];
@@ -87,8 +107,19 @@ export const ActivityDetail: React.FC = () => {
     });
   }, [activityRecords, activityItems, recordSearchQuery]);
 
+  const filteredPurchaseItems = useMemo(() => {
+    return activityPurchaseItems.filter((item) => {
+      const matchesSearch =
+        item.name.toLowerCase().includes(purchaseSearchQuery.toLowerCase()) ||
+        item.supplier.toLowerCase().includes(purchaseSearchQuery.toLowerCase());
+      const matchesStatus = filterPurchaseStatus === 'all' || item.status === filterPurchaseStatus;
+      return matchesSearch && matchesStatus;
+    });
+  }, [activityPurchaseItems, purchaseSearchQuery, filterPurchaseStatus]);
+
   const tabs = [
     { id: 'items' as TabType, label: '物资列表', icon: ListTodo, count: activityItems.length },
+    { id: 'purchase' as TabType, label: '采购清单', icon: ShoppingCart, count: activityPurchaseItems.length },
     { id: 'records' as TabType, label: '领取记录', icon: Users, count: activityRecords.length },
     { id: 'charts' as TabType, label: '数据图表', icon: BarChart3 },
   ];
@@ -147,8 +178,50 @@ export const ActivityDetail: React.FC = () => {
   };
 
   const handleClaimSuccess = () => {
+    setToastMessage('领取登记成功！');
     setShowSuccessToast(true);
     setTimeout(() => setShowSuccessToast(false), 3000);
+  };
+
+  const handlePurchaseItemSubmit = (data: Omit<PurchaseItem, 'id' | 'createdAt'>) => {
+    if (editingPurchaseItem) {
+      updatePurchaseItem(editingPurchaseItem.id, data);
+    } else {
+      addPurchaseItem(data);
+    }
+    setEditingPurchaseItem(null);
+  };
+
+  const handleEditPurchaseItem = (purchaseItem: PurchaseItem) => {
+    setEditingPurchaseItem(purchaseItem);
+    setIsPurchaseFormOpen(true);
+  };
+
+  const handleDeletePurchaseItem = (purchaseId: string) => {
+    setDeletePurchaseConfirm(purchaseId);
+  };
+
+  const confirmDeletePurchaseItem = () => {
+    if (deletePurchaseConfirm) {
+      deletePurchaseItem(deletePurchaseConfirm);
+      setDeletePurchaseConfirm(null);
+    }
+  };
+
+  const handleConvertPurchaseItem = (purchaseId: string) => {
+    setConvertPurchaseConfirm(purchaseId);
+  };
+
+  const confirmConvertPurchaseItem = () => {
+    if (convertPurchaseConfirm) {
+      const result = convertPurchaseToItem(convertPurchaseConfirm);
+      if (result.success) {
+        setToastMessage('已成功转为正式物资！');
+        setShowSuccessToast(true);
+        setTimeout(() => setShowSuccessToast(false), 3000);
+      }
+      setConvertPurchaseConfirm(null);
+    }
   };
 
   return (
@@ -415,6 +488,80 @@ export const ActivityDetail: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {activeTab === 'purchase' && (
+              <div>
+                <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      placeholder="搜索采购物资名称或供应商..."
+                      value={purchaseSearchQuery}
+                      onChange={(e) => setPurchaseSearchQuery(e.target.value)}
+                      className="w-full pl-11 pr-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="relative">
+                    <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <select
+                      value={filterPurchaseStatus}
+                      onChange={(e) => setFilterPurchaseStatus(e.target.value)}
+                      className="pl-11 pr-10 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all appearance-none"
+                    >
+                      <option value="all">全部状态</option>
+                      <option value="pending">待采购</option>
+                      <option value="ordered">已下单</option>
+                      <option value="shipped">已发货</option>
+                      <option value="completed">已完成</option>
+                      <option value="cancelled">已取消</option>
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditingPurchaseItem(null);
+                      setIsPurchaseFormOpen(true);
+                    }}
+                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-xl font-medium hover:from-pink-600 hover:to-purple-600 transition-all shadow-sm"
+                  >
+                    <Plus size={18} />
+                    添加采购计划
+                  </button>
+                </div>
+
+                {filteredPurchaseItems.length === 0 ? (
+                  <div className="text-center py-16">
+                    <div className="w-20 h-20 mx-auto mb-4 bg-pink-50 rounded-full flex items-center justify-center">
+                      <span className="text-3xl">🛒</span>
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-800 mb-2">
+                      {activityPurchaseItems.length === 0 ? '还没有添加采购计划' : '没有找到匹配的采购计划'}
+                    </h3>
+                    <p className="text-gray-500 mb-4">
+                      {activityPurchaseItems.length === 0
+                        ? '点击上方按钮添加采购计划吧'
+                        : '试试其他搜索条件'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredPurchaseItems.map((item, index) => (
+                      <div
+                        key={item.id}
+                        style={{ animation: `fadeInUp 0.4s ease-out ${index * 0.05}s both` }}
+                      >
+                        <PurchaseItemCard
+                          purchaseItem={item}
+                          onEdit={() => handleEditPurchaseItem(item)}
+                          onDelete={() => handleDeletePurchaseItem(item.id)}
+                          onConvert={() => handleConvertPurchaseItem(item.id)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -436,6 +583,17 @@ export const ActivityDetail: React.FC = () => {
         activityId={id!}
         items={activityItems.filter((i) => i.currentStock > 0)}
         onSuccess={handleClaimSuccess}
+      />
+
+      <PurchaseItemForm
+        isOpen={isPurchaseFormOpen}
+        onClose={() => {
+          setIsPurchaseFormOpen(false);
+          setEditingPurchaseItem(null);
+        }}
+        onSubmit={handlePurchaseItemSubmit}
+        activityId={id!}
+        purchaseItem={editingPurchaseItem}
       />
 
       <Modal
@@ -489,11 +647,63 @@ export const ActivityDetail: React.FC = () => {
         </div>
       </Modal>
 
+      <Modal
+        isOpen={!!deletePurchaseConfirm}
+        onClose={() => setDeletePurchaseConfirm(null)}
+        title="确认删除采购计划"
+        size="sm"
+      >
+        <p className="text-gray-600 mb-6">
+          确定要删除这个采购计划吗？该操作无法恢复。
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setDeletePurchaseConfirm(null)}
+            className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
+          >
+            取消
+          </button>
+          <button
+            onClick={confirmDeletePurchaseItem}
+            className="flex-1 py-3 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 transition-colors"
+          >
+            <Trash2 size={16} className="inline mr-2" />
+            确认删除
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={!!convertPurchaseConfirm}
+        onClose={() => setConvertPurchaseConfirm(null)}
+        title="确认转为正式物资"
+        size="sm"
+      >
+        <p className="text-gray-600 mb-6">
+          确定要将这个采购计划转为正式物资吗？转换后该采购计划将被移除，并在物资列表中新增一条正式物资记录。
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setConvertPurchaseConfirm(null)}
+            className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
+          >
+            取消
+          </button>
+          <button
+            onClick={confirmConvertPurchaseItem}
+            className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-medium hover:from-green-600 hover:to-emerald-600 transition-all"
+          >
+            <CheckCircle size={16} className="inline mr-2" />
+            确认转换
+          </button>
+        </div>
+      </Modal>
+
       {showSuccessToast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
           <div className="flex items-center gap-2 px-6 py-3 bg-green-500 text-white rounded-xl shadow-lg">
             <Gift size={20} />
-            <span className="font-medium">领取登记成功！</span>
+            <span className="font-medium">{toastMessage}</span>
           </div>
         </div>
       )}

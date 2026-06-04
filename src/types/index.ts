@@ -2,6 +2,8 @@ export type ItemType = 'lightstick' | 'banner' | 'sticker' | 'freepack' | 'lotte
 
 export type ActivityStatus = 'upcoming' | 'ongoing' | 'completed';
 
+export type PurchaseStatus = 'pending' | 'ordered' | 'shipped' | 'completed' | 'cancelled';
+
 export interface Activity {
   id: string;
   name: string;
@@ -40,10 +42,24 @@ export interface ClaimRecord {
   createdAt: string;
 }
 
+export interface PurchaseItem {
+  id: string;
+  activityId: string;
+  name: string;
+  type: ItemType;
+  expectedQuantity: number;
+  budget: number;
+  supplier: string;
+  status: PurchaseStatus;
+  note: string;
+  createdAt: string;
+}
+
 export interface AppData {
   activities: Activity[];
   items: Item[];
   records: ClaimRecord[];
+  purchaseItems: PurchaseItem[];
 }
 
 export interface ActivityStats {
@@ -81,4 +97,12 @@ export const ACTIVITY_STATUS_CONFIG: Record<ActivityStatus, { label: string; col
   upcoming: { label: '即将开始', color: '#87CEEB' },
   ongoing: { label: '进行中', color: '#98FB98' },
   completed: { label: '已结束', color: '#D3D3D3' },
+};
+
+export const PURCHASE_STATUS_CONFIG: Record<PurchaseStatus, { label: string; color: string }> = {
+  pending: { label: '待采购', color: '#FFB6C1' },
+  ordered: { label: '已下单', color: '#87CEEB' },
+  shipped: { label: '已发货', color: '#DDA0DD' },
+  completed: { label: '已完成', color: '#98FB98' },
+  cancelled: { label: '已取消', color: '#D3D3D3' },
 };
