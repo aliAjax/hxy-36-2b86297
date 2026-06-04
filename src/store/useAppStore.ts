@@ -12,6 +12,7 @@ import {
   ItemType,
   ITEM_TYPE_CONFIG,
   Todo,
+  PreClaimant,
 } from '@/types';
 import { generateId, getDateKey } from '@/utils/helpers';
 
@@ -21,6 +22,7 @@ interface AppState {
   records: ClaimRecord[];
   purchaseItems: PurchaseItem[];
   todos: Todo[];
+  preClaimants: PreClaimant[];
 
   addActivity: (data: Omit<Activity, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateActivity: (id: string, data: Partial<Activity>) => void;
@@ -50,6 +52,11 @@ interface AppState {
   deletePurchaseItem: (id: string) => void;
   convertPurchaseToItem: (purchaseId: string) => { success: boolean; item?: Item; error?: string };
 
+  addPreClaimant: (data: Omit<PreClaimant, 'id' | 'createdAt'>) => void;
+  updatePreClaimant: (id: string, data: Partial<PreClaimant>) => void;
+  deletePreClaimant: (id: string) => void;
+  findPreClaimantByName: (activityId: string, name: string) => PreClaimant | undefined;
+
   exportData: () => string;
   importData: (data: AppData) => { success: boolean; error?: string };
   clearAllData: () => void;
@@ -68,6 +75,7 @@ export const useAppStore = create<AppState>()(
       records: [],
       purchaseItems: [],
       todos: [],
+      preClaimants: [],
 
       addActivity: (data) => {
         const now = new Date().toISOString();
@@ -98,6 +106,7 @@ export const useAppStore = create<AppState>()(
           records: state.records.filter((r) => r.activityId !== id),
           purchaseItems: state.purchaseItems.filter((p) => p.activityId !== id),
           todos: state.todos.filter((t) => t.activityId !== id),
+          preClaimants: state.preClaimants.filter((p) => p.activityId !== id),
         }));
       },
 
@@ -264,6 +273,40 @@ export const useAppStore = create<AppState>()(
         return { success: true, item: newItem };
       },
 
+      addPreClaimant: (data) => {
+        const newPreClaimant: PreClaimant = {
+          ...data,
+          id: generateId(),
+          createdAt: new Date().toISOString(),
+        };
+        set((state) => ({
+          preClaimants: [...state.preClaimants, newPreClaimant],
+        }));
+      },
+
+      updatePreClaimant: (id, data) => {
+        set((state) => ({
+          preClaimants: state.preClaimants.map((p) =>
+            p.id === id ? { ...p, ...data } : p
+          ),
+        }));
+      },
+
+      deletePreClaimant: (id) => {
+        set((state) => ({
+          preClaimants: state.preClaimants.filter((p) => p.id !== id),
+        }));
+      },
+
+      findPreClaimantByName: (activityId, name) => {
+        const state = get();
+        return state.preClaimants.find(
+          (p) =>
+            p.activityId === activityId &&
+            p.name.trim().toLowerCase() === name.trim().toLowerCase()
+        );
+      },
+
       exportData: () => {
         const state = get();
         const exportObj: AppData = {
@@ -272,6 +315,7 @@ export const useAppStore = create<AppState>()(
           records: state.records,
           purchaseItems: state.purchaseItems,
           todos: state.todos,
+          preClaimants: state.preClaimants,
         };
         return JSON.stringify(exportObj, null, 2);
       },
@@ -291,6 +335,7 @@ export const useAppStore = create<AppState>()(
             records: data.records,
             purchaseItems: Array.isArray(data.purchaseItems) ? data.purchaseItems : [],
             todos: Array.isArray(data.todos) ? data.todos : [],
+            preClaimants: Array.isArray(data.preClaimants) ? data.preClaimants : [],
           });
           return { success: true };
         } catch (e) {
@@ -305,6 +350,7 @@ export const useAppStore = create<AppState>()(
           records: [],
           purchaseItems: [],
           todos: [],
+          preClaimants: [],
         });
       },
 

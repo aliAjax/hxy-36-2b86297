@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, CheckCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, UserCheck } from 'lucide-react';
 import { Item, ClaimRecord } from '@/types';
 import { Modal } from './Modal';
 import { useAppStore } from '@/store/useAppStore';
@@ -13,7 +13,7 @@ interface ClaimFormProps {
 }
 
 export const ClaimForm: React.FC<ClaimFormProps> = ({ isOpen, onClose, activityId, items, onSuccess }) => {
-  const { addRecord, checkDuplicateClaim } = useAppStore();
+  const { addRecord, checkDuplicateClaim, findPreClaimantByName } = useAppStore();
   const [formData, setFormData] = useState({
     itemId: '',
     claimerName: '',
@@ -23,6 +23,8 @@ export const ClaimForm: React.FC<ClaimFormProps> = ({ isOpen, onClose, activityI
   });
   const [duplicateWarning, setDuplicateWarning] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [preClaimantMatch, setPreClaimantMatch] = useState<{ name: string; contact: string; expectedItems: string } | null>(null);
+  const [preClaimantPrompted, setPreClaimantPrompted] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -35,6 +37,8 @@ export const ClaimForm: React.FC<ClaimFormProps> = ({ isOpen, onClose, activityI
       });
       setDuplicateWarning(false);
       setSelectedItem(items.length > 0 ? items[0] : null);
+      setPreClaimantMatch(null);
+      setPreClaimantPrompted(false);
     }
   }, [isOpen, items]);
 
@@ -46,13 +50,35 @@ export const ClaimForm: React.FC<ClaimFormProps> = ({ isOpen, onClose, activityI
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const name = e.target.value;
     setFormData({ ...formData, claimerName: name });
-    
+    setPreClaimantPrompted(false);
+
     if (formData.itemId && name.trim()) {
       const isDuplicate = checkDuplicateClaim(activityId, formData.itemId, name);
       setDuplicateWarning(isDuplicate);
     } else {
       setDuplicateWarning(false);
     }
+
+    const matched = findPreClaimantByName(activityId, name);
+    if (matched && matched.contact) {
+      setPreClaimantMatch({ name: matched.name, contact: matched.contact, expectedItems: matched.expectedItems });
+    } else {
+      setPreClaimantMatch(null);
+    }
+  };
+
+  const handleApplyPreClaimant = () => {
+    if (preClaimantMatch) {
+      setFormData((prev) => ({
+        ...prev,
+        contact: preClaimantMatch.contact,
+      }));
+      setPreClaimantPrompted(true);
+    }
+  };
+
+  const handleDismissPreClaimant = () => {
+    setPreClaimantPrompted(true);
   };
 
   const handleItemChange = (itemId: string) => {
@@ -146,6 +172,8 @@ export const ClaimForm: React.FC<ClaimFormProps> = ({ isOpen, onClose, activityI
               className={`w-full px-4 py-3 rounded-xl border-2 focus:ring-2 outline-none transition-all ${
                 duplicateWarning
                   ? 'border-orange-400 focus:border-orange-400 focus:ring-orange-100 bg-orange-50'
+                  : preClaimantMatch && !preClaimantPrompted
+                  ? 'border-blue-400 focus:border-blue-400 focus:ring-blue-100 bg-blue-50'
                   : 'border-gray-200 focus:border-pink-400 focus:ring-pink-100'
               }`}
             />
@@ -185,6 +213,45 @@ export const ClaimForm: React.FC<ClaimFormProps> = ({ isOpen, onClose, activityI
             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-100 outline-none transition-all"
           />
         </div>
+
+        {preClaimantMatch && !preClaimantPrompted && (
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+            <div className="flex items-start gap-3">
+              <UserCheck className="text-blue-500 flex-shrink-0 mt-0.5" size={20} />
+              <div className="flex-1">
+                <p className="font-medium text-blue-800 mb-1">📋 命中预登记名单</p>
+                <p className="text-sm text-blue-700 mb-1">
+                  已找到「{preClaimantMatch.name}」的预登记信息
+                </p>
+                {preClaimantMatch.expectedItems && (
+                  <p className="text-sm text-blue-600 mb-2">
+                    预期领取物资：{preClaimantMatch.expectedItems}
+                  </p>
+                )}
+                <p className="text-sm text-blue-700 mb-3">
+                  联系方式：{preClaimantMatch.contact}，是否自动填入？
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleApplyPreClaimant}
+                    className="flex items-center gap-1 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors"
+                  >
+                    <CheckCircle size={16} />
+                    沿用
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDismissPreClaimant}
+                    className="px-4 py-2 bg-white text-blue-600 border border-blue-300 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors"
+                  >
+                    不沿用
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {duplicateWarning && (
           <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">

@@ -52,6 +52,16 @@ export interface ClaimRecord {
   createdAt: string;
 }
 
+export interface PreClaimant {
+  id: string;
+  activityId: string;
+  name: string;
+  contact: string;
+  expectedItems: string;
+  note: string;
+  createdAt: string;
+}
+
 export interface PurchaseItem {
   id: string;
   activityId: string;
@@ -71,6 +81,7 @@ export interface AppData {
   records: ClaimRecord[];
   purchaseItems: PurchaseItem[];
   todos: Todo[];
+  preClaimants: PreClaimant[];
 }
 
 export interface ActivityStats {

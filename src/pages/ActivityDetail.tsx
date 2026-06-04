@@ -16,6 +16,7 @@ import {
   CheckCircle,
   Clock,
   ClipboardList,
+  UserCheck,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { StatsCard } from '@/components/StatsCard';
@@ -29,11 +30,13 @@ import { PurchaseItemForm } from '@/components/PurchaseItemForm';
 import { PurchaseItemCard } from '@/components/PurchaseItemCard';
 import { TodoItem } from '@/components/TodoItem';
 import { TodoForm } from '@/components/TodoForm';
+import { PreClaimantItem } from '@/components/PreClaimantItem';
+import { PreClaimantForm } from '@/components/PreClaimantForm';
 import { Modal } from '@/components/Modal';
 import { formatDate, cn } from '@/utils/helpers';
-import { Item, PurchaseItem, Todo, ACTIVITY_STATUS_CONFIG } from '@/types';
+import { Item, PurchaseItem, Todo, PreClaimant, ACTIVITY_STATUS_CONFIG } from '@/types';
 
-type TabType = 'items' | 'records' | 'charts' | 'purchase' | 'todos';
+type TabType = 'items' | 'records' | 'charts' | 'purchase' | 'todos' | 'preregister';
 
 export const ActivityDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -44,6 +47,7 @@ export const ActivityDetail: React.FC = () => {
     records,
     purchaseItems,
     todos,
+    preClaimants,
     addItem,
     updateItem,
     deleteItem,
@@ -56,6 +60,9 @@ export const ActivityDetail: React.FC = () => {
     updateTodo,
     deleteTodo,
     toggleTodo,
+    addPreClaimant,
+    updatePreClaimant,
+    deletePreClaimant,
     getActivityStats,
     getItemConsumptionData,
     getTypeDistributionData,
@@ -66,18 +73,22 @@ export const ActivityDetail: React.FC = () => {
   const [isClaimFormOpen, setIsClaimFormOpen] = useState(false);
   const [isPurchaseFormOpen, setIsPurchaseFormOpen] = useState(false);
   const [isTodoFormOpen, setIsTodoFormOpen] = useState(false);
+  const [isPreClaimantFormOpen, setIsPreClaimantFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [editingPurchaseItem, setEditingPurchaseItem] = useState<PurchaseItem | null>(null);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+  const [editingPreClaimant, setEditingPreClaimant] = useState<PreClaimant | null>(null);
   const [deleteItemConfirm, setDeleteItemConfirm] = useState<string | null>(null);
   const [deleteRecordConfirm, setDeleteRecordConfirm] = useState<string | null>(null);
   const [deletePurchaseConfirm, setDeletePurchaseConfirm] = useState<string | null>(null);
   const [deleteTodoConfirm, setDeleteTodoConfirm] = useState<string | null>(null);
+  const [deletePreClaimantConfirm, setDeletePreClaimantConfirm] = useState<string | null>(null);
   const [convertPurchaseConfirm, setConvertPurchaseConfirm] = useState<string | null>(null);
   const [itemSearchQuery, setItemSearchQuery] = useState('');
   const [recordSearchQuery, setRecordSearchQuery] = useState('');
   const [purchaseSearchQuery, setPurchaseSearchQuery] = useState('');
   const [todoSearchQuery, setTodoSearchQuery] = useState('');
+  const [preClaimantSearchQuery, setPreClaimantSearchQuery] = useState('');
   const [filterItemType, setFilterItemType] = useState<string>('all');
   const [filterPurchaseStatus, setFilterPurchaseStatus] = useState<string>('all');
   const [filterTodoStatus, setFilterTodoStatus] = useState<string>('all');
@@ -105,6 +116,10 @@ export const ActivityDetail: React.FC = () => {
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     }),
     [todos, id]
+  );
+  const activityPreClaimants = useMemo(
+    () => preClaimants.filter((p) => p.activityId === id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [preClaimants, id]
   );
   const stats = id ? getActivityStats(id) : null;
   const consumptionData = id ? getItemConsumptionData(id) : [];
@@ -152,6 +167,17 @@ export const ActivityDetail: React.FC = () => {
     });
   }, [activityTodos, todoSearchQuery, filterTodoStatus]);
 
+  const filteredPreClaimants = useMemo(() => {
+    return activityPreClaimants.filter((p) => {
+      const q = preClaimantSearchQuery.toLowerCase();
+      return (
+        p.name.toLowerCase().includes(q) ||
+        p.contact.toLowerCase().includes(q) ||
+        p.expectedItems.toLowerCase().includes(q)
+      );
+    });
+  }, [activityPreClaimants, preClaimantSearchQuery]);
+
   const pendingTodoCount = activityTodos.filter((t) => !t.completed).length;
 
   const getCountdownText = () => {
@@ -171,6 +197,7 @@ export const ActivityDetail: React.FC = () => {
   const tabs = [
     { id: 'items' as TabType, label: '物资列表', icon: ListTodo, count: activityItems.length },
     { id: 'purchase' as TabType, label: '采购清单', icon: ShoppingCart, count: activityPurchaseItems.length },
+    { id: 'preregister' as TabType, label: '预登记', icon: UserCheck, count: activityPreClaimants.length },
     { id: 'records' as TabType, label: '领取记录', icon: Users, count: activityRecords.length },
     { id: 'todos' as TabType, label: '待办事项', icon: ClipboardList, count: pendingTodoCount },
     { id: 'charts' as TabType, label: '数据图表', icon: BarChart3 },
@@ -298,6 +325,31 @@ export const ActivityDetail: React.FC = () => {
     if (deleteTodoConfirm) {
       deleteTodo(deleteTodoConfirm);
       setDeleteTodoConfirm(null);
+    }
+  };
+
+  const handlePreClaimantSubmit = (data: Omit<PreClaimant, 'id' | 'createdAt'>) => {
+    if (editingPreClaimant) {
+      updatePreClaimant(editingPreClaimant.id, data);
+    } else {
+      addPreClaimant(data);
+    }
+    setEditingPreClaimant(null);
+  };
+
+  const handleEditPreClaimant = (preClaimant: PreClaimant) => {
+    setEditingPreClaimant(preClaimant);
+    setIsPreClaimantFormOpen(true);
+  };
+
+  const handleDeletePreClaimant = (preClaimantId: string) => {
+    setDeletePreClaimantConfirm(preClaimantId);
+  };
+
+  const confirmDeletePreClaimant = () => {
+    if (deletePreClaimantConfirm) {
+      deletePreClaimant(deletePreClaimantConfirm);
+      setDeletePreClaimantConfirm(null);
     }
   };
 
@@ -734,6 +786,64 @@ export const ActivityDetail: React.FC = () => {
                 )}
               </div>
             )}
+
+            {activeTab === 'preregister' && (
+              <div>
+                <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      placeholder="搜索姓名、联系方式或预期物资..."
+                      value={preClaimantSearchQuery}
+                      onChange={(e) => setPreClaimantSearchQuery(e.target.value)}
+                      className="w-full pl-11 pr-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all"
+                    />
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditingPreClaimant(null);
+                      setIsPreClaimantFormOpen(true);
+                    }}
+                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-xl font-medium hover:from-pink-600 hover:to-purple-600 transition-all shadow-sm"
+                  >
+                    <Plus size={18} />
+                    添加预登记
+                  </button>
+                </div>
+
+                {filteredPreClaimants.length === 0 ? (
+                  <div className="text-center py-16">
+                    <div className="w-20 h-20 mx-auto mb-4 bg-purple-50 rounded-full flex items-center justify-center">
+                      <span className="text-3xl">👤</span>
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-800 mb-2">
+                      {activityPreClaimants.length === 0 ? '还没有添加预登记' : '没有找到匹配的预登记'}
+                    </h3>
+                    <p className="text-gray-500 mb-4">
+                      {activityPreClaimants.length === 0
+                        ? '在活动开始前录入可能来领取的人，领取登记时将自动匹配'
+                        : '试试其他搜索条件'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredPreClaimants.map((preClaimant, index) => (
+                      <div
+                        key={preClaimant.id}
+                        style={{ animation: `fadeInUp 0.3s ease-out ${index * 0.03}s both` }}
+                      >
+                        <PreClaimantItem
+                          preClaimant={preClaimant}
+                          onEdit={() => handleEditPreClaimant(preClaimant)}
+                          onDelete={() => handleDeletePreClaimant(preClaimant.id)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -777,6 +887,17 @@ export const ActivityDetail: React.FC = () => {
         onSubmit={handleTodoSubmit}
         activityId={id!}
         todo={editingTodo}
+      />
+
+      <PreClaimantForm
+        isOpen={isPreClaimantFormOpen}
+        onClose={() => {
+          setIsPreClaimantFormOpen(false);
+          setEditingPreClaimant(null);
+        }}
+        onSubmit={handlePreClaimantSubmit}
+        activityId={id!}
+        preClaimant={editingPreClaimant}
       />
 
       <Modal
@@ -900,6 +1021,32 @@ export const ActivityDetail: React.FC = () => {
           </button>
           <button
             onClick={confirmDeleteTodo}
+            className="flex-1 py-3 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 transition-colors"
+          >
+            <Trash2 size={16} className="inline mr-2" />
+            确认删除
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={!!deletePreClaimantConfirm}
+        onClose={() => setDeletePreClaimantConfirm(null)}
+        title="确认删除预登记"
+        size="sm"
+      >
+        <p className="text-gray-600 mb-6">
+          确定要删除这条预登记信息吗？该操作无法恢复。
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setDeletePreClaimantConfirm(null)}
+            className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
+          >
+            取消
+          </button>
+          <button
+            onClick={confirmDeletePreClaimant}
             className="flex-1 py-3 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 transition-colors"
           >
             <Trash2 size={16} className="inline mr-2" />
