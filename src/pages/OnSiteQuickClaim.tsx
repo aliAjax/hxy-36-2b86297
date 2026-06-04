@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { formatDate, cn } from '@/utils/helpers';
-import { Item, ClaimRecord, ACTIVITY_STATUS_CONFIG } from '@/types';
+import { ACTIVITY_STATUS_CONFIG } from '@/types';
 
 export const OnSiteQuickClaim: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -60,7 +60,8 @@ export const OnSiteQuickClaim: React.FC = () => {
       ...r,
       item: activityItems.find((i) => i.id === r.itemId),
     }));
-  }, [records, activityItems, id, getRecentRecords]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activityItems, id, getRecentRecords, records]);
 
   const lowStockItems = useMemo(
     () => activityItems.filter((i) => i.currentStock > 0 && i.currentStock <= 5),
