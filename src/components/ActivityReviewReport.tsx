@@ -75,18 +75,20 @@ interface ReviewReportJSON {
 export const ActivityReviewReport: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const {
-    activities,
-    items,
-    records,
-    getActivityStats,
-    getItemConsumptionData,
-    getTypeDistributionData,
-  } = useAppStore();
+
+  const activities = useAppStore((state) => state.activities);
+  const items = useAppStore((state) => state.items);
+  const records = useAppStore((state) => state.records);
+  const getActivityStats = useAppStore((state) => state.getActivityStats);
+  const getItemConsumptionData = useAppStore((state) => state.getItemConsumptionData);
+  const getTypeDistributionData = useAppStore((state) => state.getTypeDistributionData);
 
   const [hideContact, setHideContact] = useState(false);
 
-  const activity = activities.find((a) => a.id === id);
+  const activity = useMemo(
+    () => activities.find((a) => a.id === id),
+    [activities, id]
+  );
 
   const activityItems = useMemo(
     () => items.filter((i) => i.activityId === id),
@@ -104,9 +106,20 @@ export const ActivityReviewReport: React.FC = () => {
     [records, id]
   );
 
-  const stats = id ? getActivityStats(id) : null;
-  const consumptionData = id ? getItemConsumptionData(id) : [];
-  const typeDistributionData = id ? getTypeDistributionData(id) : [];
+  const stats = useMemo(
+    () => (id ? getActivityStats(id) : null),
+    [id, getActivityStats]
+  );
+
+  const consumptionData = useMemo(
+    () => (id ? getItemConsumptionData(id) : []),
+    [id, getItemConsumptionData]
+  );
+
+  const typeDistributionData = useMemo(
+    () => (id ? getTypeDistributionData(id) : []),
+    [id, getTypeDistributionData]
+  );
 
   const duplicateRecords = useMemo(
     () => activityRecords.filter((r) => r.isDuplicateWarning),
@@ -237,6 +250,14 @@ export const ActivityReviewReport: React.FC = () => {
     window.print();
   }, []);
 
+  const handleNavigateBack = useCallback(() => {
+    navigate(`/activity/${id}`);
+  }, [navigate, id]);
+
+  const handleToggleHideContact = useCallback(() => {
+    setHideContact((prev) => !prev);
+  }, []);
+
   if (!activity) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-purple-50 flex items-center justify-center">
@@ -264,7 +285,7 @@ export const ActivityReviewReport: React.FC = () => {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => navigate(`/activity/${id}`)}
+              onClick={handleNavigateBack}
               className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-xl text-gray-700 hover:bg-gray-100 transition-colors"
             >
               <ArrowLeft size={18} />
@@ -277,7 +298,7 @@ export const ActivityReviewReport: React.FC = () => {
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setHideContact(!hideContact)}
+              onClick={handleToggleHideContact}
               className={cn(
                 'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border',
                 hideContact
