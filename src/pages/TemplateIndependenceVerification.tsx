@@ -70,8 +70,6 @@ export const TemplateIndependenceVerification: React.FC = () => {
     target: null,
   });
   const [templateId, setTemplateId] = useState<string | null>(null);
-  const [snapshot, setSnapshot] = useState<Map<string, MaterialTemplateItem> | null>(null);
-  const [templateSnapshot, setTemplateSnapshot] = useState<MaterialTemplate | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [testDataCreated, setTestDataCreated] = useState(false);
 
@@ -89,8 +87,12 @@ export const TemplateIndependenceVerification: React.FC = () => {
     setSteps((prev) => prev.map((s) => ({ ...s, status: 'pending', result: undefined, error: undefined })));
     setActivityIds({ source: null, target: null });
     setTemplateId(null);
-    setSnapshot(null);
-    setTemplateSnapshot(null);
+
+    // LOCAL variables for immediate comparison (avoids React state async update issues)
+    let localSnapshot: Map<string, MaterialTemplateItem> | null = null;
+    let localTemplateSnapshot: MaterialTemplate | null = null;
+    let targetActivityLocal: { id: string; name: string } | null = null;
+    let templateIdLocal: string | null = null;
 
     try {
       // ============ Step 1: Create source activity and add items ============
@@ -157,8 +159,9 @@ export const TemplateIndependenceVerification: React.FC = () => {
         throw new Error(saveResult.error || '保存模板失败');
       }
 
+      templateIdLocal = saveResult.template.id;
+      localTemplateSnapshot = JSON.parse(JSON.stringify(saveResult.template));
       setTemplateId(saveResult.template.id);
-      setTemplateSnapshot(JSON.parse(JSON.stringify(saveResult.template)));
 
       updateStep('step2', {
         status: 'success',
@@ -183,6 +186,7 @@ export const TemplateIndependenceVerification: React.FC = () => {
       if (!targetActivity) {
         throw new Error('无法找到刚创建的目标活动');
       }
+      targetActivityLocal = { id: targetActivity.id, name: targetActivity.name };
 
       setActivityIds((prev) => ({ ...prev, target: targetActivity.id }));
 
@@ -210,11 +214,11 @@ export const TemplateIndependenceVerification: React.FC = () => {
           note: item.note,
         });
       });
-      setSnapshot(snap);
+      localSnapshot = snap;
 
       updateStep('step3', {
         status: 'success',
-        result: `已创建目标活动"【验证用】目标活动" (ID: ${targetActivity.id.slice(0, 8)}...)，从模板创建 ${applyResult.createdItems.length} 项物资。所有物资分配了新 ID，与模板没有引用关系。`,
+        result: `已创建目标活动"【验证用】目标活动" (ID: ${targetActivity.id.slice(0, 8)}...)，从模板创建 ${applyResult.createdItems.length} 项物资。所有物资分配了新 ID，与模板没有引用关系。快照已保存 (${snap.size} 项)`,
       });
 
       // ============ Step 4: Edit the template ============
@@ -256,16 +260,37 @@ export const TemplateIndependenceVerification: React.FC = () => {
       updateStep('step5', { status: 'running' });
       await delay(800);
 
+      if (!targetActivityLocal) {
+        throw new Error('目标活动引用丢失');
+      }
+      if (!localSnapshot || localSnapshot.size === 0) {
+        throw new Error('快照为空或未正确保存，无法进行比较');
+      }
+
       const stateAfterTemplateEdit = getState();
-      const currentItems = stateAfterTemplateEdit.items.filter((i) => i.activityId === targetActivity.id);
+      const currentItems = stateAfterTemplateEdit.items.filter(
+        (i) => i.activityId === targetActivityLocal!.id
+      );
       const mismatches: string[] = [];
+      let comparisonCount = 0;
+
+      // Explicitly verify we have the right number of items to compare
+      if (currentItems.length !== localSnapshot.size) {
+        throw new Error(
+          `物资数量不匹配！快照有 ${localSnapshot.size} 项，当前有 ${currentItems.length} 项`
+        );
+      }
 
       currentItems.forEach((item) => {
-        const snapItem = snapshot?.get(item.id);
-        if (!snapItem) return;
+        const snapItem = localSnapshot!.get(item.id);
+        if (!snapItem) {
+          mismatches.push(`${item.name}: 快照中找不到该物资的记录！`);
+          return;
+        }
 
         const fieldsToCheck = ['name', 'totalStock', 'budget', 'supplier'] as const;
         fieldsToCheck.forEach((field) => {
+          comparisonCount++;
           if (item[field] !== snapItem[field]) {
             mismatches.push(
               `${item.name}: ${field} 不匹配！快照=${snapItem[field]}, 当前=${item[field]}`
@@ -273,6 +298,14 @@ export const TemplateIndependenceVerification: React.FC = () => {
           }
         });
       });
+
+      // CRITICAL: Verify that comparisons actually ran (not skipped due to null/undefined)
+      const expectedComparisons = currentItems.length * 4; // 4 fields per item
+      if (comparisonCount !== expectedComparisons) {
+        throw new Error(
+          `比较执行次数异常！预期 ${expectedComparisons} 次比较，实际只执行了 ${comparisonCount} 次。可能存在空快照跳过比较的问题。`
+        );
+      }
 
       if (mismatches.length > 0) {
         throw new Error(`检测到 ${mismatches.length} 处不匹配：${mismatches.join('; ')}`);
@@ -298,12 +331,16 @@ export const TemplateIndependenceVerification: React.FC = () => {
 
       updateStep('step5', {
         status: 'success',
-        result: `✅ 验证通过！目标活动的 ${currentItems.length} 项物资全部保持原始值，未随模板修改而变化。灯牌A仍为"灯牌 A"、库存100、预算5000、供应商A。物资 ID 均为新生成，与模板无引用关系。`,
+        result: `✅ 验证通过！对目标活动的 ${currentItems.length} 项物资执行了 ${comparisonCount} 次字段比较，全部保持原始值。灯牌A仍为"灯牌 A"、库存100、预算5000、供应商A。物资 ID 均为新生成，与模板无引用关系。`,
       });
 
       // ============ Step 6: Reverse verification - activity item edits don't affect template ============
       updateStep('step6', { status: 'running' });
       await delay(800);
+
+      if (!templateIdLocal || !localTemplateSnapshot) {
+        throw new Error('模板引用或模板快照丢失');
+      }
 
       // Modify target activity items
       currentItems.forEach((item) => {
@@ -317,31 +354,42 @@ export const TemplateIndependenceVerification: React.FC = () => {
       // Check template is unchanged
       const stateAfterActivityEdit = getState();
       const templateAfterActivityEdit = stateAfterActivityEdit.materialTemplates.find(
-        (t) => t.id === saveResult.template.id
+        (t) => t.id === templateIdLocal!
       );
 
       let reverseMismatch = false;
       let reverseMismatchDetail = '';
+      let reverseComparisonCount = 0;
 
-      if (templateAfterActivityEdit && templateSnapshot) {
-        if (templateAfterActivityEdit.items.length !== templateSnapshot.items.length) {
-          reverseMismatch = true;
-          reverseMismatchDetail = '模板物资数量变化了！';
-        } else {
-          for (let i = 0; i < templateSnapshot.items.length; i++) {
-            const original = templateSnapshot.items[i];
-            const current = templateAfterActivityEdit.items[i];
-            if (
-              original.name !== current.name ||
-              original.totalStock !== current.totalStock ||
-              original.budget !== current.budget
-            ) {
+      if (!templateAfterActivityEdit) {
+        throw new Error('修改活动物资后，模板不见了！');
+      }
+
+      if (templateAfterActivityEdit.items.length !== localTemplateSnapshot.items.length) {
+        reverseMismatch = true;
+        reverseMismatchDetail = '模板物资数量变化了！';
+      } else {
+        for (let i = 0; i < localTemplateSnapshot.items.length; i++) {
+          const original = localTemplateSnapshot.items[i];
+          const current = templateAfterActivityEdit.items[i];
+          const fieldsToCheck = ['name', 'totalStock', 'budget'] as const;
+          fieldsToCheck.forEach((field) => {
+            reverseComparisonCount++;
+            if (original[field] !== current[field]) {
               reverseMismatch = true;
-              reverseMismatchDetail = `第 ${i + 1} 项物资不匹配：原始=(${original.name}, ${original.totalStock}, ${original.budget})，当前=(${current.name}, ${current.totalStock}, ${current.budget})`;
-              break;
+              reverseMismatchDetail = `第 ${i + 1} 项物资 ${field} 不匹配：原始=${original[field]}, 当前=${current[field]}`;
             }
-          }
+          });
+          if (reverseMismatch) break;
         }
+      }
+
+      // Verify reverse comparisons actually ran
+      const expectedReverseComparisons = localTemplateSnapshot.items.length * 3;
+      if (reverseComparisonCount !== expectedReverseComparisons) {
+        throw new Error(
+          `反向比较执行次数异常！预期 ${expectedReverseComparisons} 次，实际 ${reverseComparisonCount} 次`
+        );
       }
 
       if (reverseMismatch) {
@@ -350,7 +398,7 @@ export const TemplateIndependenceVerification: React.FC = () => {
 
       updateStep('step6', {
         status: 'success',
-        result: `✅ 反向验证通过！修改活动物资（名称追加"活动内修改"、库存+12345、预算+67890）后，模板数据完全保持不变，没有受到任何影响。`,
+        result: `✅ 反向验证通过！对模板的 ${localTemplateSnapshot.items.length} 项物资执行了 ${reverseComparisonCount} 次字段比较。修改活动物资（名称追加"活动内修改"、库存+12345、预算+67890）后，模板数据完全保持不变。`,
       });
 
       setTestDataCreated(true);
@@ -379,8 +427,6 @@ export const TemplateIndependenceVerification: React.FC = () => {
     }
     setActivityIds({ source: null, target: null });
     setTemplateId(null);
-    setSnapshot(null);
-    setTemplateSnapshot(null);
     setTestDataCreated(false);
     setSteps((prev) => prev.map((s) => ({ ...s, status: 'pending', result: undefined, error: undefined })));
   };
