@@ -108,6 +108,8 @@ export const BatchClaimForm: React.FC<BatchClaimFormProps> = ({
   }, [rawText]);
 
   const validatedRows = useMemo((): ValidatedRow[] => {
+    const stockAllocated = new Map<string, number>();
+
     return parsedRows.map((row) => {
       const validated: ValidatedRow = {
         ...row,
@@ -120,6 +122,7 @@ export const BatchClaimForm: React.FC<BatchClaimFormProps> = ({
           type: 'empty_name',
           message: '领取人姓名不能为空',
         });
+        return validated;
       }
 
       if (row.quantity <= 0 || isNaN(row.quantity)) {
@@ -127,6 +130,7 @@ export const BatchClaimForm: React.FC<BatchClaimFormProps> = ({
           type: 'invalid_quantity',
           message: `数量异常：${row.quantity}`,
         });
+        return validated;
       }
 
       const matchedItem = items.find(
@@ -138,30 +142,36 @@ export const BatchClaimForm: React.FC<BatchClaimFormProps> = ({
           type: 'item_not_found',
           message: `找不到物资「${row.itemName}」`,
         });
+        return validated;
+      }
+
+      validated.itemId = matchedItem.id;
+      validated.item = matchedItem;
+
+      const allocated = stockAllocated.get(matchedItem.id) || 0;
+      const availableStock = matchedItem.currentStock - allocated;
+
+      if (availableStock < row.quantity) {
+        validated.errors.push({
+          type: 'stock_insufficient',
+          message: `库存不足，当前可用 ${availableStock} 个（已被本批次其他记录占用 ${allocated} 个）`,
+        });
       } else {
-        validated.itemId = matchedItem.id;
-        validated.item = matchedItem;
+        stockAllocated.set(matchedItem.id, allocated + row.quantity);
+      }
 
-        if (matchedItem.currentStock < row.quantity) {
-          validated.errors.push({
-            type: 'stock_insufficient',
-            message: `库存不足，剩余 ${matchedItem.currentStock} 个`,
+      if (row.claimerName.trim()) {
+        const isDuplicate = checkDuplicateClaim(activityId, matchedItem.id, row.claimerName);
+        if (isDuplicate) {
+          validated.warnings.push({
+            type: 'duplicate',
+            message: `「${row.claimerName}」已领取过「${matchedItem.name}」`,
           });
-        }
-
-        if (row.claimerName.trim()) {
-          const isDuplicate = checkDuplicateClaim(activityId, matchedItem.id, row.claimerName);
-          if (isDuplicate) {
-            validated.warnings.push({
+          if (!forceAddDuplicates) {
+            validated.errors.push({
               type: 'duplicate',
-              message: `「${row.claimerName}」已领取过「${matchedItem.name}」`,
+              message: `重复领取，可勾选"强制导入重复记录"跳过此检查`,
             });
-            if (!forceAddDuplicates) {
-              validated.errors.push({
-                type: 'duplicate',
-                message: `重复领取，可勾选"强制导入重复记录"跳过此检查`,
-              });
-            }
           }
         }
       }
