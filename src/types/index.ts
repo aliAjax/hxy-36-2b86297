@@ -128,3 +128,37 @@ export const PURCHASE_STATUS_CONFIG: Record<PurchaseStatus, { label: string; col
   completed: { label: '已完成', color: '#98FB98' },
   cancelled: { label: '已取消', color: '#D3D3D3' },
 };
+
+export type HealthIssueType =
+  | 'orphan_item'
+  | 'orphan_record'
+  | 'negative_stock'
+  | 'stock_mismatch'
+  | 'missing_activity_date'
+  | 'missing_activity_status';
+
+export interface HealthIssue {
+  type: HealthIssueType;
+  severity: 'error' | 'warning';
+  title: string;
+  description: string;
+  affectedIds: string[];
+  affectedItems?: { id: string; name: string; detail: string }[];
+  fixable: boolean;
+  fixDescription?: string;
+}
+
+export interface HealthCheckResult {
+  totalIssues: number;
+  errorCount: number;
+  warningCount: number;
+  issues: HealthIssue[];
+  checkedAt: string;
+}
+
+export interface FixPreview {
+  issueType: HealthIssueType;
+  title: string;
+  affectedCount: number;
+  changes: string[];
+}

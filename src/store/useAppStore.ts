@@ -13,6 +13,8 @@ import {
   ITEM_TYPE_CONFIG,
   Todo,
   PreClaimant,
+  HealthCheckResult,
+  HealthIssue,
 } from '@/types';
 import { generateId, getDateKey } from '@/utils/helpers';
 
@@ -81,6 +83,22 @@ interface AppState {
   getTypeDistributionData: (activityId: string) => TypeDistributionData[];
   getTodayClaimQuantity: (activityId: string, itemId?: string) => number;
   getRecentRecords: (activityId: string, limit?: number) => ClaimRecord[];
+
+  runHealthCheck: () => HealthCheckResult;
+  fixOrphanItems: () => { deletedCount: number; deletedIds: string[] };
+  fixOrphanRecords: () => { deletedCount: number; deletedIds: string[] };
+  fixNegativeStock: () => { fixedCount: number; fixedIds: string[] };
+  fixStockMismatch: () => { fixedCount: number; fixedIds: string[] };
+  fixMissingActivityDate: () => { fixedCount: number; fixedIds: string[] };
+  fixMissingActivityStatus: () => { fixedCount: number; fixedIds: string[] };
+  fixAllIssues: () => {
+    orphanItemsDeleted: number;
+    orphanRecordsDeleted: number;
+    negativeStockFixed: number;
+    stockMismatchFixed: number;
+    missingDateFixed: number;
+    missingStatusFixed: number;
+  };
 }
 
 export const useAppStore = create<AppState>()(
@@ -554,6 +572,279 @@ export const useAppStore = create<AppState>()(
           .filter((r) => r.activityId === activityId)
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
           .slice(0, limit);
+      },
+
+      runHealthCheck: () => {
+        const state = get();
+        const issues: HealthIssue[] = [];
+
+        const activityIds = new Set(state.activities.map((a) => a.id));
+        const itemIds = new Set(state.items.map((i) => i.id));
+
+        const orphanItems = state.items.filter((i) => !activityIds.has(i.activityId));
+        if (orphanItems.length > 0) {
+          issues.push({
+            type: 'orphan_item',
+            severity: 'error',
+            title: '孤儿物资',
+            description: '存在没有对应活动的物资数据',
+            affectedIds: orphanItems.map((i) => i.id),
+            affectedItems: orphanItems.map((i) => ({
+              id: i.id,
+              name: i.name,
+              detail: `所属活动ID: ${i.activityId}（不存在）`,
+            })),
+            fixable: true,
+            fixDescription: '删除所有孤儿物资',
+          });
+        }
+
+        const orphanRecords = state.records.filter(
+          (r) => !activityIds.has(r.activityId) || !itemIds.has(r.itemId)
+        );
+        if (orphanRecords.length > 0) {
+          issues.push({
+            type: 'orphan_record',
+            severity: 'error',
+            title: '孤儿领取记录',
+            description: '存在没有对应活动或物资的领取记录',
+            affectedIds: orphanRecords.map((r) => r.id),
+            affectedItems: orphanRecords.map((r) => {
+              const hasActivity = activityIds.has(r.activityId);
+              const hasItem = itemIds.has(r.itemId);
+              let detail = '';
+              if (!hasActivity && !hasItem) {
+                detail = '活动和物资均不存在';
+              } else if (!hasActivity) {
+                detail = '所属活动不存在';
+              } else {
+                detail = '对应物资不存在';
+              }
+              return {
+                id: r.id,
+                name: r.claimerName,
+                detail,
+              };
+            }),
+            fixable: true,
+            fixDescription: '删除所有孤儿领取记录',
+          });
+        }
+
+        const negativeStockItems = state.items.filter((i) => i.currentStock < 0);
+        if (negativeStockItems.length > 0) {
+          issues.push({
+            type: 'negative_stock',
+            severity: 'error',
+            title: '库存为负',
+            description: '存在库存数量为负数的物资',
+            affectedIds: negativeStockItems.map((i) => i.id),
+            affectedItems: negativeStockItems.map((i) => ({
+              id: i.id,
+              name: i.name,
+              detail: `当前库存: ${i.currentStock}`,
+            })),
+            fixable: true,
+            fixDescription: '将负库存重置为 0',
+          });
+        }
+
+        const stockMismatchItems: Item[] = [];
+        state.items.forEach((item) => {
+          const itemRecords = state.records.filter((r) => r.itemId === item.id);
+          const totalClaimed = itemRecords.reduce((sum, r) => sum + r.quantity, 0);
+          const calculatedStock = item.totalStock - totalClaimed;
+          if (calculatedStock !== item.currentStock) {
+            stockMismatchItems.push(item);
+          }
+        });
+        if (stockMismatchItems.length > 0) {
+          issues.push({
+            type: 'stock_mismatch',
+            severity: 'warning',
+            title: '库存不一致',
+            description: '物资的已发放数量与实际记录数量不一致',
+            affectedIds: stockMismatchItems.map((i) => i.id),
+            affectedItems: stockMismatchItems.map((i) => {
+              const itemRecords = state.records.filter((r) => r.itemId === i.id);
+              const totalClaimed = itemRecords.reduce((sum, r) => sum + r.quantity, 0);
+              const calculatedStock = i.totalStock - totalClaimed;
+              return {
+                id: i.id,
+                name: i.name,
+                detail: `记录库存: ${i.currentStock}, 计算库存: ${calculatedStock} (总库存 ${i.totalStock} - 已领取 ${totalClaimed})`,
+              };
+            }),
+            fixable: true,
+            fixDescription: '根据领取记录重新计算并修正库存',
+          });
+        }
+
+        const missingDateActivities = state.activities.filter(
+          (a) => !a.date || a.date.trim() === ''
+        );
+        if (missingDateActivities.length > 0) {
+          issues.push({
+            type: 'missing_activity_date',
+            severity: 'warning',
+            title: '活动日期缺失',
+            description: '存在未设置日期的活动',
+            affectedIds: missingDateActivities.map((a) => a.id),
+            affectedItems: missingDateActivities.map((a) => ({
+              id: a.id,
+              name: a.name,
+              detail: '日期字段为空',
+            })),
+            fixable: true,
+            fixDescription: '将缺失日期的活动日期设为创建日期',
+          });
+        }
+
+        const missingStatusActivities = state.activities.filter(
+          (a) => !a.status || a.status.trim() === ''
+        );
+        if (missingStatusActivities.length > 0) {
+          issues.push({
+            type: 'missing_activity_status',
+            severity: 'warning',
+            title: '活动状态缺失',
+            description: '存在未设置状态的活动',
+            affectedIds: missingStatusActivities.map((a) => a.id),
+            affectedItems: missingStatusActivities.map((a) => ({
+              id: a.id,
+              name: a.name,
+              detail: '状态字段为空',
+            })),
+            fixable: true,
+            fixDescription: '将缺失状态的活动状态设为 "即将开始"',
+          });
+        }
+
+        const errorCount = issues.filter((i) => i.severity === 'error').length;
+        const warningCount = issues.filter((i) => i.severity === 'warning').length;
+
+        return {
+          totalIssues: issues.length,
+          errorCount,
+          warningCount,
+          issues,
+          checkedAt: new Date().toISOString(),
+        };
+      },
+
+      fixOrphanItems: () => {
+        const state = get();
+        const activityIds = new Set(state.activities.map((a) => a.id));
+        const orphanItems = state.items.filter((i) => !activityIds.has(i.activityId));
+        const deletedIds = orphanItems.map((i) => i.id);
+
+        set((state) => ({
+          items: state.items.filter((i) => activityIds.has(i.activityId)),
+        }));
+
+        return { deletedCount: orphanItems.length, deletedIds };
+      },
+
+      fixOrphanRecords: () => {
+        const state = get();
+        const activityIds = new Set(state.activities.map((a) => a.id));
+        const itemIds = new Set(state.items.map((i) => i.id));
+        const orphanRecords = state.records.filter(
+          (r) => !activityIds.has(r.activityId) || !itemIds.has(r.itemId)
+        );
+        const deletedIds = orphanRecords.map((r) => r.id);
+
+        set((state) => ({
+          records: state.records.filter(
+            (r) => activityIds.has(r.activityId) && itemIds.has(r.itemId)
+          ),
+        }));
+
+        return { deletedCount: orphanRecords.length, deletedIds };
+      },
+
+      fixNegativeStock: () => {
+        const state = get();
+        const negativeStockItems = state.items.filter((i) => i.currentStock < 0);
+        const fixedIds = negativeStockItems.map((i) => i.id);
+
+        set((state) => ({
+          items: state.items.map((i) =>
+            i.currentStock < 0 ? { ...i, currentStock: 0 } : i
+          ),
+        }));
+
+        return { fixedCount: negativeStockItems.length, fixedIds };
+      },
+
+      fixStockMismatch: () => {
+        const state = get();
+        const fixedIds: string[] = [];
+
+        const updatedItems = state.items.map((item) => {
+          const itemRecords = state.records.filter((r) => r.itemId === item.id);
+          const totalClaimed = itemRecords.reduce((sum, r) => sum + r.quantity, 0);
+          const calculatedStock = item.totalStock - totalClaimed;
+          if (calculatedStock !== item.currentStock) {
+            fixedIds.push(item.id);
+            return { ...item, currentStock: calculatedStock };
+          }
+          return item;
+        });
+
+        set({ items: updatedItems });
+
+        return { fixedCount: fixedIds.length, fixedIds };
+      },
+
+      fixMissingActivityDate: () => {
+        const state = get();
+        const missingDateActivities = state.activities.filter(
+          (a) => !a.date || a.date.trim() === ''
+        );
+        const fixedIds = missingDateActivities.map((a) => a.id);
+
+        set((state) => ({
+          activities: state.activities.map((a) =>
+            !a.date || a.date.trim() === '' ? { ...a, date: a.createdAt.split('T')[0] } : a
+          ),
+        }));
+
+        return { fixedCount: missingDateActivities.length, fixedIds };
+      },
+
+      fixMissingActivityStatus: () => {
+        const state = get();
+        const missingStatusActivities = state.activities.filter(
+          (a) => !a.status || a.status.trim() === ''
+        );
+        const fixedIds = missingStatusActivities.map((a) => a.id);
+
+        set((state) => ({
+          activities: state.activities.map((a) =>
+            !a.status || a.status.trim() === '' ? { ...a, status: 'upcoming' as const } : a
+          ),
+        }));
+
+        return { fixedCount: missingStatusActivities.length, fixedIds };
+      },
+
+      fixAllIssues: () => {
+        const result1 = get().fixOrphanItems();
+        const result2 = get().fixOrphanRecords();
+        const result3 = get().fixNegativeStock();
+        const result4 = get().fixStockMismatch();
+        const result5 = get().fixMissingActivityDate();
+        const result6 = get().fixMissingActivityStatus();
+
+        return {
+          orphanItemsDeleted: result1.deletedCount,
+          orphanRecordsDeleted: result2.deletedCount,
+          negativeStockFixed: result3.fixedCount,
+          stockMismatchFixed: result4.fixedCount,
+          missingDateFixed: result5.fixedCount,
+          missingStatusFixed: result6.fixedCount,
+        };
       },
     }),
     {

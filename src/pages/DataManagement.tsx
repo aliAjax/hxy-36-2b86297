@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Download, Upload, Trash2, FileJson, CheckCircle, AlertTriangle, Database, Image } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { Modal } from '@/components/Modal';
+import { DataHealthCenter } from '@/components/DataHealthCenter';
 import { downloadFile, readFileAsText, formatFileSize } from '@/utils/helpers';
 import { AppData } from '@/types';
 import { Link } from 'react-router-dom';
@@ -129,6 +130,10 @@ export const DataManagement: React.FC = () => {
               <p className="text-lg font-bold text-gray-800">LocalStorage</p>
             </div>
           </div>
+        </div>
+
+        <div className="mb-6">
+          <DataHealthCenter />
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-pink-50 p-6 mb-6 hover:shadow-md transition-shadow">
