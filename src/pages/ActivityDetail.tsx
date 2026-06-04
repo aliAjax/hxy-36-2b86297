@@ -17,6 +17,7 @@ import {
   Clock,
   ClipboardList,
   UserCheck,
+  Monitor,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { StatsCard } from '@/components/StatsCard';
@@ -397,13 +398,22 @@ export const ActivityDetail: React.FC = () => {
               </div>
               <p className="text-white/80">{formatDate(activity.date)}</p>
             </div>
-            <button
-              onClick={() => setIsClaimFormOpen(true)}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-xl font-medium hover:from-pink-600 hover:to-purple-600 transition-all shadow-lg shadow-pink-500/30"
-            >
-              <Gift size={20} />
-              登记领取
-            </button>
+            <div className="flex gap-3">
+              <Link
+                to={`/activity/${id}/kanban`}
+                className="flex items-center gap-2 px-6 py-3 bg-white/90 backdrop-blur-sm text-gray-700 rounded-xl font-medium hover:bg-white transition-all shadow-lg"
+              >
+                <Monitor size={20} />
+                现场看板
+              </Link>
+              <button
+                onClick={() => setIsClaimFormOpen(true)}
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-xl font-medium hover:from-pink-600 hover:to-purple-600 transition-all shadow-lg shadow-pink-500/30"
+              >
+                <Gift size={20} />
+                登记领取
+              </button>
+            </div>
           </div>
         </div>
       </div>

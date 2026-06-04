@@ -65,6 +65,8 @@ interface AppState {
   getActivityStats: (activityId: string) => ActivityStats;
   getItemConsumptionData: (activityId: string) => ConsumptionData[];
   getTypeDistributionData: (activityId: string) => TypeDistributionData[];
+  getTodayClaimQuantity: (activityId: string, itemId?: string) => number;
+  getRecentRecords: (activityId: string, limit?: number) => ClaimRecord[];
 }
 
 export const useAppStore = create<AppState>()(
@@ -421,6 +423,26 @@ export const useAppStore = create<AppState>()(
             value: typeMap.get(type) || 0,
             color: ITEM_TYPE_CONFIG[type].color,
           }));
+      },
+
+      getTodayClaimQuantity: (activityId, itemId) => {
+        const state = get();
+        const today = getDateKey(new Date().toISOString());
+        return state.records
+          .filter((r) => {
+            if (r.activityId !== activityId) return false;
+            if (itemId && r.itemId !== itemId) return false;
+            return getDateKey(r.createdAt) === today;
+          })
+          .reduce((sum, r) => sum + r.quantity, 0);
+      },
+
+      getRecentRecords: (activityId, limit = 10) => {
+        const state = get();
+        return state.records
+          .filter((r) => r.activityId === activityId)
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, limit);
       },
     }),
     {
