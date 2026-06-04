@@ -143,3 +143,43 @@ select {
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
+
+@media print {
+  body {
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+
+  nav,
+  [class*="Navbar"] {
+    display: none !important;
+  }
+
+  .bg-gradient-to-br,
+  .bg-gradient-to-r {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .shadow-lg,
+  .shadow-sm,
+  .shadow {
+    box-shadow: none !important;
+  }
+
+  .hover\:shadow-lg:hover,
+  .hover\:-translate-y-1:hover {
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  @page {
+    margin: 1.5cm;
+    size: A4;
+  }
+}

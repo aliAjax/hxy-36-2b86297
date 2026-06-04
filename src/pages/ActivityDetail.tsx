@@ -19,6 +19,7 @@ import {
   UserCheck,
   Monitor,
   Upload,
+  FileText,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { StatsCard } from '@/components/StatsCard';
@@ -402,6 +403,13 @@ export const ActivityDetail: React.FC = () => {
               <p className="text-white/80">{formatDate(activity.date)}</p>
             </div>
             <div className="flex gap-3">
+              <Link
+                to={`/activity/${id}/report`}
+                className="flex items-center gap-2 px-6 py-3 bg-white/90 backdrop-blur-sm text-gray-700 rounded-xl font-medium hover:bg-white transition-all shadow-lg"
+              >
+                <FileText size={20} />
+                复盘报告
+              </Link>
               <Link
                 to={`/activity/${id}/kanban`}
                 className="flex items-center gap-2 px-6 py-3 bg-white/90 backdrop-blur-sm text-gray-700 rounded-xl font-medium hover:bg-white transition-all shadow-lg"
