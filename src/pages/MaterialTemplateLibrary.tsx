@@ -16,6 +16,7 @@ import {
 import { useAppStore } from '@/store/useAppStore';
 import { Modal } from '@/components/Modal';
 import { ApplyTemplateDialog } from '@/components/ApplyTemplateDialog';
+import { EditTemplateDialog } from '@/components/EditTemplateDialog';
 import { formatDate } from '@/utils/helpers';
 import { MaterialTemplate, ITEM_TYPE_CONFIG } from '@/types';
 
@@ -23,15 +24,12 @@ export const MaterialTemplateLibrary: React.FC = () => {
   const {
     materialTemplates,
     deleteMaterialTemplate,
-    updateMaterialTemplate,
   } = useAppStore();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [expandedTemplateId, setExpandedTemplateId] = useState<string | null>(null);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editDescription, setEditDescription] = useState('');
   const [applyTemplateId, setApplyTemplateId] = useState<string | null>(null);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -54,26 +52,21 @@ export const MaterialTemplateLibrary: React.FC = () => {
     if (deleteConfirm) {
       deleteMaterialTemplate(deleteConfirm);
       setDeleteConfirm(null);
+      setToastMessage('模板已删除');
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 3000);
     }
   };
 
   const handleStartEdit = (template: MaterialTemplate) => {
     setEditingTemplateId(template.id);
-    setEditName(template.name);
-    setEditDescription(template.description);
   };
 
-  const handleSaveEdit = () => {
-    if (editingTemplateId) {
-      updateMaterialTemplate(editingTemplateId, {
-        name: editName.trim(),
-        description: editDescription.trim(),
-      });
-      setEditingTemplateId(null);
-      setToastMessage('模板已更新');
-      setShowSuccessToast(true);
-      setTimeout(() => setShowSuccessToast(false), 3000);
-    }
+  const handleEditSuccess = () => {
+    setEditingTemplateId(null);
+    setToastMessage('模板配置已更新');
+    setShowSuccessToast(true);
+    setTimeout(() => setShowSuccessToast(false), 3000);
   };
 
   const handleApplySuccess = (count: number) => {
@@ -141,7 +134,6 @@ export const MaterialTemplateLibrary: React.FC = () => {
             {filteredTemplates.map((template) => {
               const stats = getTemplateStats(template);
               const isExpanded = expandedTemplateId === template.id;
-              const isEditing = editingTemplateId === template.id;
 
               return (
                 <div
@@ -151,51 +143,16 @@ export const MaterialTemplateLibrary: React.FC = () => {
                   <div className="p-5">
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
-                        {isEditing ? (
-                          <div className="space-y-3 mb-3">
-                            <input
-                              type="text"
-                              value={editName}
-                              onChange={(e) => setEditName(e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none text-sm"
-                              placeholder="模板名称"
-                            />
-                            <textarea
-                              value={editDescription}
-                              onChange={(e) => setEditDescription(e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none text-sm resize-none"
-                              rows={2}
-                              placeholder="模板描述"
-                            />
-                            <div className="flex gap-2">
-                              <button
-                                onClick={handleSaveEdit}
-                                className="px-4 py-1.5 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-lg text-sm font-medium hover:from-pink-600 hover:to-purple-600 transition-all"
-                              >
-                                保存
-                              </button>
-                              <button
-                                onClick={() => setEditingTemplateId(null)}
-                                className="px-4 py-1.5 border border-gray-200 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
-                              >
-                                取消
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex items-center gap-3 mb-1">
-                              <h3 className="text-lg font-bold text-gray-800 truncate">
-                                {template.name}
-                              </h3>
-                              <span className="px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full text-xs font-medium">
-                                {template.items.length} 项物资
-                              </span>
-                            </div>
-                            {template.description && (
-                              <p className="text-gray-500 text-sm mb-2">{template.description}</p>
-                            )}
-                          </>
+                        <div className="flex items-center gap-3 mb-1">
+                          <h3 className="text-lg font-bold text-gray-800 truncate">
+                            {template.name}
+                          </h3>
+                          <span className="px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full text-xs font-medium">
+                            {template.items.length} 项物资
+                          </span>
+                        </div>
+                        {template.description && (
+                          <p className="text-gray-500 text-sm mb-2">{template.description}</p>
                         )}
                         <div className="flex items-center gap-4 text-xs text-gray-400 mt-2">
                           <span className="flex items-center gap-1">
@@ -209,29 +166,28 @@ export const MaterialTemplateLibrary: React.FC = () => {
                         </div>
                       </div>
 
-                      {!isEditing && (
-                        <div className="flex items-center gap-1 ml-4">
-                          <button
-                            onClick={() => setApplyTemplateId(template.id)}
-                            className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg text-sm font-medium hover:from-green-600 hover:to-emerald-600 transition-all shadow-sm"
-                          >
-                            <Copy size={14} />
-                            应用到活动
-                          </button>
-                          <button
-                            onClick={() => handleStartEdit(template)}
-                            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirm(template.id)}
-                            className="p-2 rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-500 transition-colors"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1 ml-4">
+                        <button
+                          onClick={() => setApplyTemplateId(template.id)}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg text-sm font-medium hover:from-green-600 hover:to-emerald-600 transition-all shadow-sm"
+                        >
+                          <Copy size={14} />
+                          应用到活动
+                        </button>
+                        <button
+                          onClick={() => handleStartEdit(template)}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg text-sm font-medium hover:from-blue-600 hover:to-indigo-600 transition-all shadow-sm"
+                        >
+                          <Edit2 size={14} />
+                          编辑配置
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirm(template.id)}
+                          className="p-2 rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-3 gap-3 mt-4">
@@ -338,6 +294,15 @@ export const MaterialTemplateLibrary: React.FC = () => {
           onClose={() => setApplyTemplateId(null)}
           templateId={applyTemplateId}
           onSuccess={handleApplySuccess}
+        />
+      )}
+
+      {editingTemplateId && (
+        <EditTemplateDialog
+          isOpen={true}
+          onClose={() => setEditingTemplateId(null)}
+          templateId={editingTemplateId}
+          onSuccess={handleEditSuccess}
         />
       )}
 

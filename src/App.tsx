@@ -6,6 +6,7 @@ import { DataManagement } from "@/pages/DataManagement";
 import { ImageLibrary } from "@/pages/ImageLibrary";
 import { OnSiteKanban } from "@/pages/OnSiteKanban";
 import { MaterialTemplateLibrary } from "@/pages/MaterialTemplateLibrary";
+import { TemplateIndependenceVerification } from "@/pages/TemplateIndependenceVerification";
 import { ActivityReviewReport } from "@/components/ActivityReviewReport";
 
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/data" element={<DataManagement />} />
           <Route path="/images" element={<ImageLibrary />} />
           <Route path="/templates" element={<MaterialTemplateLibrary />} />
+          <Route path="/verification" element={<TemplateIndependenceVerification />} />
         </Routes>
       </div>
     </Router>
