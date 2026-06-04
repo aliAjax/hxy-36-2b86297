@@ -160,7 +160,6 @@ export const TemplateIndependenceVerification: React.FC = () => {
       }
 
       templateIdLocal = saveResult.template.id;
-      localTemplateSnapshot = JSON.parse(JSON.stringify(saveResult.template));
       setTemplateId(saveResult.template.id);
 
       updateStep('step2', {
@@ -251,9 +250,13 @@ export const TemplateIndependenceVerification: React.FC = () => {
         items: updatedTemplateItems,
       });
 
+      localTemplateSnapshot = JSON.parse(
+        JSON.stringify(getState().materialTemplates.find((t) => t.id === saveResult.template.id)!)
+      );
+
       updateStep('step4', {
         status: 'success',
-        result: `模板已修改：灯牌A → 灯牌A(已修改)，库存 100→200，预算 5000→7500，供应商变更；手幅B → 手幅B(已修改)，库存 999，预算 9999。`,
+        result: `模板已修改：灯牌A → 灯牌A(已修改)，库存 100→200，预算 5000→7500，供应商变更；手幅B → 手幅B(已修改)，库存 999，预算 9999。反向验证基准快照已更新（基于编辑后模板状态）。`,
       });
 
       // ============ Step 5: Verify created items are not affected ============
@@ -288,19 +291,18 @@ export const TemplateIndependenceVerification: React.FC = () => {
           return;
         }
 
-        const fieldsToCheck = ['name', 'totalStock', 'budget', 'supplier'] as const;
+        const fieldsToCheck = ['name', 'type', 'designUrl', 'budget', 'supplier', 'totalStock', 'distributionRule', 'note'] as const;
         fieldsToCheck.forEach((field) => {
           comparisonCount++;
           if (item[field] !== snapItem[field]) {
             mismatches.push(
-              `${item.name}: ${field} 不匹配！快照=${snapItem[field]}, 当前=${item[field]}`
+              `${item.name} → ${field}: 快照=${snapItem[field]}, 当前=${item[field]}`
             );
           }
         });
       });
 
-      // CRITICAL: Verify that comparisons actually ran (not skipped due to null/undefined)
-      const expectedComparisons = currentItems.length * 4; // 4 fields per item
+      const expectedComparisons = currentItems.length * 8;
       if (comparisonCount !== expectedComparisons) {
         throw new Error(
           `比较执行次数异常！预期 ${expectedComparisons} 次比较，实际只执行了 ${comparisonCount} 次。可能存在空快照跳过比较的问题。`
@@ -308,7 +310,9 @@ export const TemplateIndependenceVerification: React.FC = () => {
       }
 
       if (mismatches.length > 0) {
-        throw new Error(`检测到 ${mismatches.length} 处不匹配：${mismatches.join('; ')}`);
+        throw new Error(
+          `正向验证失败！检测到 ${mismatches.length} 处不匹配：\n${mismatches.join('\n')}`
+        );
       }
 
       // Also verify IDs are different (template items don't have IDs, but created items have unique IDs)
@@ -331,7 +335,7 @@ export const TemplateIndependenceVerification: React.FC = () => {
 
       updateStep('step5', {
         status: 'success',
-        result: `✅ 验证通过！对目标活动的 ${currentItems.length} 项物资执行了 ${comparisonCount} 次字段比较，全部保持原始值。灯牌A仍为"灯牌 A"、库存100、预算5000、供应商A。物资 ID 均为新生成，与模板无引用关系。`,
+        result: `✅ 验证通过！对目标活动的 ${currentItems.length} 项物资执行了 ${comparisonCount} 次字段比较（每项 8 个字段），全部保持原始值。灯牌A仍为"灯牌 A"、库存100、预算5000、供应商A。物资 ID 均为新生成，与模板无引用关系。`,
       });
 
       // ============ Step 6: Reverse verification - activity item edits don't affect template ============
@@ -357,48 +361,49 @@ export const TemplateIndependenceVerification: React.FC = () => {
         (t) => t.id === templateIdLocal!
       );
 
-      let reverseMismatch = false;
-      let reverseMismatchDetail = '';
       let reverseComparisonCount = 0;
+      const reverseMismatches: string[] = [];
 
       if (!templateAfterActivityEdit) {
         throw new Error('修改活动物资后，模板不见了！');
       }
 
       if (templateAfterActivityEdit.items.length !== localTemplateSnapshot.items.length) {
-        reverseMismatch = true;
-        reverseMismatchDetail = '模板物资数量变化了！';
-      } else {
-        for (let i = 0; i < localTemplateSnapshot.items.length; i++) {
-          const original = localTemplateSnapshot.items[i];
-          const current = templateAfterActivityEdit.items[i];
-          const fieldsToCheck = ['name', 'totalStock', 'budget'] as const;
-          fieldsToCheck.forEach((field) => {
-            reverseComparisonCount++;
-            if (original[field] !== current[field]) {
-              reverseMismatch = true;
-              reverseMismatchDetail = `第 ${i + 1} 项物资 ${field} 不匹配：原始=${original[field]}, 当前=${current[field]}`;
-            }
-          });
-          if (reverseMismatch) break;
-        }
+        throw new Error(
+          `模板物资数量变化了！编辑前 ${localTemplateSnapshot.items.length} 项，编辑后 ${templateAfterActivityEdit.items.length} 项`
+        );
       }
 
-      // Verify reverse comparisons actually ran
-      const expectedReverseComparisons = localTemplateSnapshot.items.length * 3;
+      for (let i = 0; i < localTemplateSnapshot.items.length; i++) {
+        const original = localTemplateSnapshot.items[i];
+        const current = templateAfterActivityEdit.items[i];
+        const fieldsToCheck = ['name', 'type', 'designUrl', 'budget', 'supplier', 'totalStock', 'distributionRule', 'note'] as const;
+        fieldsToCheck.forEach((field) => {
+          reverseComparisonCount++;
+          if (original[field] !== current[field]) {
+            reverseMismatches.push(
+              `物资 #${i + 1} "${original.name}" → ${field}: 基准=${original[field]}, 当前=${current[field]}`
+            );
+          }
+        });
+      }
+
+      const expectedReverseComparisons = localTemplateSnapshot.items.length * 8;
       if (reverseComparisonCount !== expectedReverseComparisons) {
         throw new Error(
           `反向比较执行次数异常！预期 ${expectedReverseComparisons} 次，实际 ${reverseComparisonCount} 次`
         );
       }
 
-      if (reverseMismatch) {
-        throw new Error(`反向验证失败！${reverseMismatchDetail}`);
+      if (reverseMismatches.length > 0) {
+        throw new Error(
+          `反向验证失败！检测到 ${reverseMismatches.length} 处不匹配：\n${reverseMismatches.join('\n')}`
+        );
       }
 
       updateStep('step6', {
         status: 'success',
-        result: `✅ 反向验证通过！对模板的 ${localTemplateSnapshot.items.length} 项物资执行了 ${reverseComparisonCount} 次字段比较。修改活动物资（名称追加"活动内修改"、库存+12345、预算+67890）后，模板数据完全保持不变。`,
+        result: `✅ 反向验证通过！对模板的 ${localTemplateSnapshot.items.length} 项物资执行了 ${reverseComparisonCount} 次字段比较（每项 8 个字段），全部保持不变。修改活动物资（名称追加"活动内修改"、库存+12345、预算+67890）后，模板数据完全独立。`,
       });
 
       setTestDataCreated(true);
@@ -431,7 +436,8 @@ export const TemplateIndependenceVerification: React.FC = () => {
     setSteps((prev) => prev.map((s) => ({ ...s, status: 'pending', result: undefined, error: undefined })));
   };
 
-  const allPassed = steps.every((s) => s.status === 'success');
+  const failedSteps = steps.filter((s) => s.status === 'failed');
+  const allPassed = steps.length > 0 && steps.every((s) => s.status === 'success');
 
   const getStatusIcon = (status: VerificationStep['status']) => {
     switch (status) {
@@ -542,7 +548,9 @@ export const TemplateIndependenceVerification: React.FC = () => {
                     </p>
                   )}
                   {step.error && (
-                    <p className="text-xs text-red-600 bg-red-100 rounded-lg p-3">{step.error}</p>
+                    <div className="text-xs text-red-700 bg-red-100 rounded-lg p-3 whitespace-pre-wrap font-mono leading-relaxed">
+                      {step.error}
+                    </div>
                   )}
                 </div>
               </div>
@@ -586,6 +594,35 @@ export const TemplateIndependenceVerification: React.FC = () => {
               模板与活动物资之间完全独立。编辑模板不会影响已创建的活动物资，
               编辑活动物资也不会影响模板。双向独立性已验证。
             </p>
+          </div>
+        )}
+
+        {failedSteps.length > 0 && (
+          <div className="mt-6 p-6 bg-red-50 rounded-2xl border-2 border-red-200">
+            <div className="text-center mb-4">
+              <div className="text-5xl mb-3">❌</div>
+              <h3 className="text-xl font-bold text-red-800 mb-2">
+                验证失败 ({failedSteps.length}/{steps.length} 步失败)
+              </h3>
+              <p className="text-red-700 text-sm">
+                以下步骤未通过验证，请检查失败原因：
+              </p>
+            </div>
+            <div className="space-y-3">
+              {failedSteps.map((step) => (
+                <div
+                  key={step.id}
+                  className="bg-white rounded-xl border border-red-200 p-4"
+                >
+                  <h4 className="font-bold text-red-800 text-sm mb-2">{step.title}</h4>
+                  {step.error && (
+                    <div className="text-xs text-red-700 bg-red-50 rounded-lg p-3 whitespace-pre-wrap font-mono leading-relaxed">
+                      {step.error}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
