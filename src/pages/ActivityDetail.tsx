@@ -22,6 +22,7 @@ import {
   FileText,
   BookTemplate,
   Copy,
+  Zap,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { StatsCard } from '@/components/StatsCard';
@@ -422,6 +423,13 @@ export const ActivityDetail: React.FC = () => {
               >
                 <Monitor size={20} />
                 现场看板
+              </Link>
+              <Link
+                to={`/activity/${id}/quick-claim`}
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-xl font-medium hover:from-yellow-500 hover:to-orange-600 transition-all shadow-lg shadow-orange-500/30"
+              >
+                <Zap size={20} />
+                快速领取
               </Link>
               <button
                 onClick={() => setIsClaimFormOpen(true)}
