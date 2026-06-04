@@ -225,6 +225,7 @@ export const useAppStore = create<AppState>()(
         }[] = [];
         const newRecords: ClaimRecord[] = [];
         const stockUpdates: Map<string, number> = new Map();
+        const batchClaims: Set<string> = new Set();
 
         data.forEach((recordData, index) => {
           const { itemId, quantity, activityId, claimerName } = recordData;
@@ -236,6 +237,29 @@ export const useAppStore = create<AppState>()(
               success: false,
               isDuplicate: false,
               error: '找不到该物资',
+            });
+            return;
+          }
+
+          const claimKey = `${claimerName.trim().toLowerCase()}|${itemId}`;
+          const isBatchDuplicate = batchClaims.has(claimKey);
+          if (isBatchDuplicate && !forceAddDuplicates) {
+            results.push({
+              index,
+              success: false,
+              isDuplicate: true,
+              error: '本批次内重复领取',
+            });
+            return;
+          }
+
+          const isHistoricalDuplicate = state.checkDuplicateClaim(activityId, itemId, claimerName);
+          if (isHistoricalDuplicate && !forceAddDuplicates) {
+            results.push({
+              index,
+              success: false,
+              isDuplicate: true,
+              error: '重复领取',
             });
             return;
           }
@@ -252,30 +276,20 @@ export const useAppStore = create<AppState>()(
             return;
           }
 
-          const isDuplicate = state.checkDuplicateClaim(activityId, itemId, claimerName);
-          if (isDuplicate && !forceAddDuplicates) {
-            results.push({
-              index,
-              success: false,
-              isDuplicate: true,
-              error: '重复领取',
-            });
-            return;
-          }
-
           const newRecord: ClaimRecord = {
             ...recordData,
             id: generateId(),
             createdAt: new Date().toISOString(),
-            isDuplicateWarning: isDuplicate,
+            isDuplicateWarning: isHistoricalDuplicate || isBatchDuplicate,
           };
 
           newRecords.push(newRecord);
           stockUpdates.set(itemId, allocatedQuantity + quantity);
+          batchClaims.add(claimKey);
           results.push({
             index,
             success: true,
-            isDuplicate,
+            isDuplicate: isHistoricalDuplicate || isBatchDuplicate,
             record: newRecord,
           });
         });

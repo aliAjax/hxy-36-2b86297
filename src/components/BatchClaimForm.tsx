@@ -18,6 +18,7 @@ interface ParsedRow {
   claimerName: string;
   contact: string;
   itemName: string;
+  quantityStr: string;
   quantity: number;
   note: string;
   raw: string;
@@ -57,7 +58,8 @@ const parseRow = (line: string, lineNumber: number): ParsedRow | null => {
   const claimerName = parts[0] || '';
   const contact = parts[1] || '';
   const itemName = parts[2] || '';
-  const quantity = parseInt(parts[3]) || 1;
+  const quantityStr = parts[3] || '';
+  const quantity = quantityStr ? parseInt(quantityStr) : 1;
   const note = parts.slice(4).join(separator).trim();
 
   return {
@@ -65,6 +67,7 @@ const parseRow = (line: string, lineNumber: number): ParsedRow | null => {
     claimerName,
     contact,
     itemName,
+    quantityStr,
     quantity,
     note,
     raw: trimmed,
@@ -109,8 +112,9 @@ export const BatchClaimForm: React.FC<BatchClaimFormProps> = ({
 
   const validatedRows = useMemo((): ValidatedRow[] => {
     const stockAllocated = new Map<string, number>();
+    const batchClaims = new Map<string, number[]>();
 
-    return parsedRows.map((row) => {
+    return parsedRows.map((row, index) => {
       const validated: ValidatedRow = {
         ...row,
         errors: [],
@@ -125,10 +129,18 @@ export const BatchClaimForm: React.FC<BatchClaimFormProps> = ({
         return validated;
       }
 
-      if (row.quantity <= 0 || isNaN(row.quantity)) {
+      if (row.quantityStr && (isNaN(row.quantity) || !Number.isInteger(row.quantity))) {
         validated.errors.push({
           type: 'invalid_quantity',
-          message: `数量异常：${row.quantity}`,
+          message: `数量格式错误：「${row.quantityStr}」不是有效整数`,
+        });
+        return validated;
+      }
+
+      if (row.quantity <= 0) {
+        validated.errors.push({
+          type: 'invalid_quantity',
+          message: `数量必须大于 0，当前：${row.quantity}`,
         });
         return validated;
       }
@@ -148,31 +160,49 @@ export const BatchClaimForm: React.FC<BatchClaimFormProps> = ({
       validated.itemId = matchedItem.id;
       validated.item = matchedItem;
 
-      const allocated = stockAllocated.get(matchedItem.id) || 0;
-      const availableStock = matchedItem.currentStock - allocated;
-
-      if (availableStock < row.quantity) {
-        validated.errors.push({
-          type: 'stock_insufficient',
-          message: `库存不足，当前可用 ${availableStock} 个（已被本批次其他记录占用 ${allocated} 个）`,
+      const claimKey = `${row.claimerName.trim().toLowerCase()}|${matchedItem.id}`;
+      const previousLines = batchClaims.get(claimKey) || [];
+      if (previousLines.length > 0) {
+        validated.warnings.push({
+          type: 'duplicate',
+          message: `本批次内重复领取（第 ${previousLines.join('、')} 行已领取）`,
         });
+        if (!forceAddDuplicates) {
+          validated.errors.push({
+            type: 'duplicate',
+            message: `本批次内重复领取，可勾选"强制导入重复记录"跳过此检查`,
+          });
+        }
       } else {
-        stockAllocated.set(matchedItem.id, allocated + row.quantity);
+        batchClaims.set(claimKey, [...previousLines, row.lineNumber]);
       }
 
-      if (row.claimerName.trim()) {
-        const isDuplicate = checkDuplicateClaim(activityId, matchedItem.id, row.claimerName);
-        if (isDuplicate) {
-          validated.warnings.push({
+      const isHistoricalDuplicate = checkDuplicateClaim(activityId, matchedItem.id, row.claimerName);
+      if (isHistoricalDuplicate) {
+        validated.warnings.push({
+          type: 'duplicate',
+          message: `「${row.claimerName}」已领取过「${matchedItem.name}」`,
+        });
+        if (!forceAddDuplicates && validated.errors.filter(e => e.type === 'duplicate').length === 0) {
+          validated.errors.push({
             type: 'duplicate',
-            message: `「${row.claimerName}」已领取过「${matchedItem.name}」`,
+            message: `重复领取，可勾选"强制导入重复记录"跳过此检查`,
           });
-          if (!forceAddDuplicates) {
-            validated.errors.push({
-              type: 'duplicate',
-              message: `重复领取，可勾选"强制导入重复记录"跳过此检查`,
-            });
-          }
+        }
+      }
+
+      const hasDuplicateError = validated.errors.some(e => e.type === 'duplicate');
+      if (!hasDuplicateError) {
+        const allocated = stockAllocated.get(matchedItem.id) || 0;
+        const availableStock = matchedItem.currentStock - allocated;
+
+        if (availableStock < row.quantity) {
+          validated.errors.push({
+            type: 'stock_insufficient',
+            message: `库存不足，当前可用 ${availableStock} 个（已被本批次其他记录占用 ${allocated} 个）`,
+          });
+        } else {
+          stockAllocated.set(matchedItem.id, allocated + row.quantity);
         }
       }
 
