@@ -18,6 +18,7 @@ import {
   ClipboardList,
   UserCheck,
   Monitor,
+  Upload,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { StatsCard } from '@/components/StatsCard';
@@ -33,6 +34,7 @@ import { TodoItem } from '@/components/TodoItem';
 import { TodoForm } from '@/components/TodoForm';
 import { PreClaimantItem } from '@/components/PreClaimantItem';
 import { PreClaimantForm } from '@/components/PreClaimantForm';
+import { BatchClaimForm } from '@/components/BatchClaimForm';
 import { Modal } from '@/components/Modal';
 import { formatDate, cn } from '@/utils/helpers';
 import { Item, PurchaseItem, Todo, PreClaimant, ACTIVITY_STATUS_CONFIG } from '@/types';
@@ -75,6 +77,7 @@ export const ActivityDetail: React.FC = () => {
   const [isPurchaseFormOpen, setIsPurchaseFormOpen] = useState(false);
   const [isTodoFormOpen, setIsTodoFormOpen] = useState(false);
   const [isPreClaimantFormOpen, setIsPreClaimantFormOpen] = useState(false);
+  const [isBatchClaimFormOpen, setIsBatchClaimFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [editingPurchaseItem, setEditingPurchaseItem] = useState<PurchaseItem | null>(null);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
@@ -585,15 +588,24 @@ export const ActivityDetail: React.FC = () => {
 
             {activeTab === 'records' && (
               <div>
-                <div className="relative mb-6">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                  <input
-                    type="text"
-                    placeholder="搜索领取人姓名或物资名称..."
-                    value={recordSearchQuery}
-                    onChange={(e) => setRecordSearchQuery(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all"
-                  />
+                <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      placeholder="搜索领取人姓名或物资名称..."
+                      value={recordSearchQuery}
+                      onChange={(e) => setRecordSearchQuery(e.target.value)}
+                      className="w-full pl-11 pr-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all"
+                    />
+                  </div>
+                  <button
+                    onClick={() => setIsBatchClaimFormOpen(true)}
+                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-xl font-medium hover:from-purple-600 hover:to-blue-600 transition-all shadow-sm"
+                  >
+                    <Upload size={18} />
+                    批量录入
+                  </button>
                 </div>
 
                 {filteredRecords.length === 0 ? (
@@ -908,6 +920,18 @@ export const ActivityDetail: React.FC = () => {
         onSubmit={handlePreClaimantSubmit}
         activityId={id!}
         preClaimant={editingPreClaimant}
+      />
+
+      <BatchClaimForm
+        isOpen={isBatchClaimFormOpen}
+        onClose={() => setIsBatchClaimFormOpen(false)}
+        activityId={id!}
+        items={activityItems}
+        onSuccess={(result) => {
+          setToastMessage(`批量导入完成：成功 ${result.successCount} 条，失败 ${result.failCount} 条`);
+          setShowSuccessToast(true);
+          setTimeout(() => setShowSuccessToast(false), 4000);
+        }}
       />
 
       <Modal

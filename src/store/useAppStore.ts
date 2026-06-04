@@ -45,6 +45,20 @@ interface AppState {
     isDuplicate: boolean;
     record?: ClaimRecord;
   };
+  addRecordsBatch: (
+    data: Omit<ClaimRecord, 'id' | 'createdAt' | 'isDuplicateWarning'>[],
+    forceAddDuplicates?: boolean
+  ) => {
+    successCount: number;
+    failCount: number;
+    results: {
+      index: number;
+      success: boolean;
+      isDuplicate: boolean;
+      error?: string;
+      record?: ClaimRecord;
+    }[];
+  };
   deleteRecord: (id: string) => void;
 
   addPurchaseItem: (data: Omit<PurchaseItem, 'id' | 'createdAt'>) => void;
@@ -198,6 +212,89 @@ export const useAppStore = create<AppState>()(
         }));
 
         return { success: true, isDuplicate, record: newRecord };
+      },
+
+      addRecordsBatch: (data, forceAddDuplicates = false) => {
+        const state = get();
+        const results: {
+          index: number;
+          success: boolean;
+          isDuplicate: boolean;
+          error?: string;
+          record?: ClaimRecord;
+        }[] = [];
+        const newRecords: ClaimRecord[] = [];
+        const stockUpdates: Map<string, number> = new Map();
+
+        data.forEach((recordData, index) => {
+          const { itemId, quantity, activityId, claimerName } = recordData;
+
+          const item = state.items.find((i) => i.id === itemId);
+          if (!item) {
+            results.push({
+              index,
+              success: false,
+              isDuplicate: false,
+              error: '找不到该物资',
+            });
+            return;
+          }
+
+          const allocatedQuantity = stockUpdates.get(itemId) || 0;
+          const availableStock = item.currentStock - allocatedQuantity;
+          if (availableStock < quantity) {
+            results.push({
+              index,
+              success: false,
+              isDuplicate: false,
+              error: `库存不足，剩余 ${availableStock} 个`,
+            });
+            return;
+          }
+
+          const isDuplicate = state.checkDuplicateClaim(activityId, itemId, claimerName);
+          if (isDuplicate && !forceAddDuplicates) {
+            results.push({
+              index,
+              success: false,
+              isDuplicate: true,
+              error: '重复领取',
+            });
+            return;
+          }
+
+          const newRecord: ClaimRecord = {
+            ...recordData,
+            id: generateId(),
+            createdAt: new Date().toISOString(),
+            isDuplicateWarning: isDuplicate,
+          };
+
+          newRecords.push(newRecord);
+          stockUpdates.set(itemId, allocatedQuantity + quantity);
+          results.push({
+            index,
+            success: true,
+            isDuplicate,
+            record: newRecord,
+          });
+        });
+
+        set((state) => ({
+          records: [...state.records, ...newRecords],
+          items: state.items.map((i) => {
+            const allocated = stockUpdates.get(i.id);
+            if (allocated !== undefined) {
+              return { ...i, currentStock: i.currentStock - allocated };
+            }
+            return i;
+          }),
+        }));
+
+        const successCount = results.filter((r) => r.success).length;
+        const failCount = results.filter((r) => !r.success).length;
+
+        return { successCount, failCount, results };
       },
 
       deleteRecord: (id) => {
