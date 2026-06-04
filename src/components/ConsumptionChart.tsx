@@ -27,7 +27,13 @@ export const ConsumptionChart: React.FC<ConsumptionChartProps> = ({ data, chartT
     );
   }
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  interface TooltipProps {
+    active?: boolean;
+    payload?: Array<{ value: number }>;
+    label?: string;
+  }
+
+  const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-white p-3 rounded-xl shadow-lg border border-pink-100">

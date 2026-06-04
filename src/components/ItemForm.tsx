@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Item, ItemType, ITEM_TYPE_CONFIG } from '@/types';
+import { Item, ItemType } from '@/types';
 import { Modal } from './Modal';
 
 interface ItemFormProps {
@@ -89,7 +89,6 @@ export const ItemForm: React.FC<ItemFormProps> = ({ isOpen, onClose, onSubmit, a
             <label className="block text-sm font-medium text-gray-700 mb-2">物资类型</label>
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
               {typeOptions.map((opt) => {
-                const config = ITEM_TYPE_CONFIG[opt.value];
                 const isSelected = formData.type === opt.value;
                 return (
                   <button

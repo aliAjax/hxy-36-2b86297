@@ -18,7 +18,12 @@ export const TypeDistributionChart: React.FC<TypeDistributionChartProps> = ({ da
 
   const total = data.reduce((sum, item) => sum + item.value, 0);
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  interface PieTooltipProps {
+    active?: boolean;
+    payload?: Array<{ payload: TypeDistributionData }>;
+  }
+
+  const CustomTooltip = ({ active, payload }: PieTooltipProps) => {
     if (active && payload && payload.length) {
       const item = payload[0].payload;
       const percentage = ((item.value / total) * 100).toFixed(1);
@@ -34,6 +39,15 @@ export const TypeDistributionChart: React.FC<TypeDistributionChartProps> = ({ da
     return null;
   };
 
+  interface PieLabelProps {
+    cx: number;
+    cy: number;
+    midAngle: number;
+    innerRadius: number;
+    outerRadius: number;
+    percent: number;
+  }
+
   const renderCustomizedLabel = ({
     cx,
     cy,
@@ -41,7 +55,7 @@ export const TypeDistributionChart: React.FC<TypeDistributionChartProps> = ({ da
     innerRadius,
     outerRadius,
     percent,
-  }: any) => {
+  }: PieLabelProps) => {
     if (percent < 0.05) return null;
     const RADIAN = Math.PI / 180;
     const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
