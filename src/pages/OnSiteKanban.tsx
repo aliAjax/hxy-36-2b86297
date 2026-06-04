@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -14,6 +14,15 @@ import { useAppStore } from '@/store/useAppStore';
 import { ItemType, ITEM_TYPE_CONFIG, ACTIVITY_STATUS_CONFIG } from '@/types';
 import { formatDateTime, cn } from '@/utils/helpers';
 
+const TYPE_ICONS: Record<string, string> = {
+  lightstick: '💡',
+  banner: '🎏',
+  sticker: '🌟',
+  freepack: '🎁',
+  lottery: '🎰',
+  other: '📦',
+};
+
 export const OnSiteKanban: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -22,8 +31,6 @@ export const OnSiteKanban: React.FC = () => {
     items,
     records,
     getTodayClaimQuantity,
-    getRecentRecords,
-    getActivityStats,
   } = useAppStore();
 
   const [selectedType, setSelectedType] = useState<ItemType | 'all'>('all');
@@ -40,16 +47,50 @@ export const OnSiteKanban: React.FC = () => {
     [items, id]
   );
   const recentRecords = useMemo(
-    () => getRecentRecords(id!, 10),
-    [records, id, getRecentRecords]
+    () =>
+      records
+        .filter((r) => r.activityId === id)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 50),
+    [records, id]
   );
-  const stats = id ? getActivityStats(id) : null;
 
   const filteredItems = useMemo(() => {
     return activityItems.filter((item) => {
       return selectedType === 'all' || item.type === selectedType;
     });
   }, [activityItems, selectedType]);
+
+  const filteredRecords = useMemo(() => {
+    if (selectedType === 'all') return recentRecords.slice(0, 10);
+    const filteredItemIds = new Set(filteredItems.map((i) => i.id));
+    return recentRecords.filter((r) => filteredItemIds.has(r.itemId)).slice(0, 10);
+  }, [recentRecords, selectedType, filteredItems]);
+
+  const typeCountMap = useMemo(() => {
+    const map = new Map<string, number>();
+    activityItems.forEach((item) => {
+      map.set(item.type, (map.get(item.type) || 0) + 1);
+    });
+    return map;
+  }, [activityItems]);
+
+  const filteredStats = useMemo(() => {
+    const list = selectedType === 'all' ? activityItems : filteredItems;
+    const totalStock = list.reduce((sum, i) => sum + i.totalStock, 0);
+    const remainingStock = list.reduce((sum, i) => sum + i.currentStock, 0);
+    const todayClaimed = list.reduce(
+      (sum, i) => sum + getTodayClaimQuantity(id!, i.id),
+      0
+    );
+    return {
+      totalItems: list.length,
+      totalStock,
+      remainingStock,
+      distributedStock: totalStock - remainingStock,
+      todayClaimed,
+    };
+  }, [activityItems, filteredItems, selectedType, id, getTodayClaimQuantity]);
 
   const getStockColor = (stockPercentage: number) => {
     if (stockPercentage <= 20) return 'bg-red-500';
@@ -83,7 +124,6 @@ export const OnSiteKanban: React.FC = () => {
   }
 
   const statusConfig = ACTIVITY_STATUS_CONFIG[activity.status];
-  const todayTotalClaims = getTodayClaimQuantity(id!);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
@@ -137,7 +177,7 @@ export const OnSiteKanban: React.FC = () => {
               </div>
               <div>
                 <p className="text-gray-400 text-lg">物资种类</p>
-                <p className="text-5xl font-bold text-white">{stats?.totalItems || 0}</p>
+                <p className="text-5xl font-bold text-white">{filteredStats.totalItems}</p>
               </div>
             </div>
           </div>
@@ -148,7 +188,7 @@ export const OnSiteKanban: React.FC = () => {
               </div>
               <div>
                 <p className="text-gray-400 text-lg">剩余库存</p>
-                <p className="text-5xl font-bold text-white">{stats?.remainingStock || 0}</p>
+                <p className="text-5xl font-bold text-white">{filteredStats.remainingStock}</p>
               </div>
             </div>
           </div>
@@ -159,7 +199,7 @@ export const OnSiteKanban: React.FC = () => {
               </div>
               <div>
                 <p className="text-gray-400 text-lg">今日已发放</p>
-                <p className="text-5xl font-bold text-white">{todayTotalClaims}</p>
+                <p className="text-5xl font-bold text-white">{filteredStats.todayClaimed}</p>
               </div>
             </div>
           </div>
@@ -170,11 +210,26 @@ export const OnSiteKanban: React.FC = () => {
               </div>
               <div>
                 <p className="text-gray-400 text-lg">累计发放</p>
-                <p className="text-5xl font-bold text-white">{stats?.distributedStock || 0}</p>
+                <p className="text-5xl font-bold text-white">{filteredStats.distributedStock}</p>
               </div>
             </div>
           </div>
         </div>
+
+        {selectedType !== 'all' && (
+          <div className="mb-8 flex items-center gap-3 px-5 py-3 bg-yellow-500/15 border border-yellow-500/30 rounded-2xl">
+            <Filter size={22} className="text-yellow-400" />
+            <span className="text-yellow-200 text-lg font-medium">
+              当前筛选：{ITEM_TYPE_CONFIG[selectedType].label}（{filteredStats.totalItems} 种物资）
+            </span>
+            <button
+              onClick={() => setSelectedType('all')}
+              className="ml-auto px-4 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors"
+            >
+              清除筛选
+            </button>
+          </div>
+        )}
 
         <div className="bg-white/5 rounded-2xl p-6 border border-gray-700 mb-8">
           <div className="flex items-center justify-between mb-6">
@@ -194,36 +249,57 @@ export const OnSiteKanban: React.FC = () => {
             <button
               onClick={() => setSelectedType('all')}
               className={cn(
-                'px-6 py-3 rounded-xl font-medium text-lg transition-all',
+                'px-6 py-3 rounded-xl font-medium text-lg transition-all flex items-center gap-2',
                 selectedType === 'all'
                   ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white'
                   : 'bg-white/10 text-gray-300 hover:bg-white/20'
               )}
             >
               全部
-            </button>
-            {Object.entries(ITEM_TYPE_CONFIG).map(([key, config]) => (
-              <button
-                key={key}
-                onClick={() => setSelectedType(key as ItemType)}
+              <span
                 className={cn(
-                  'px-6 py-3 rounded-xl font-medium text-lg transition-all flex items-center gap-2',
-                  selectedType === key
-                    ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white'
-                    : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                  'ml-1 px-2 py-0.5 rounded-full text-sm font-bold',
+                  selectedType === 'all'
+                    ? 'bg-white/25 text-white'
+                    : 'bg-white/10 text-gray-400'
                 )}
               >
-                <span>
-                  {key === 'lightstick' && '💡'}
-                  {key === 'banner' && '🎏'}
-                  {key === 'sticker' && '🌟'}
-                  {key === 'freepack' && '🎁'}
-                  {key === 'lottery' && '🎰'}
-                  {key === 'other' && '📦'}
-                </span>
-                {config.label}
-              </button>
-            ))}
+                {activityItems.length}
+              </span>
+            </button>
+            {Object.entries(ITEM_TYPE_CONFIG).map(([key, config]) => {
+              const count = typeCountMap.get(key) || 0;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setSelectedType(key as ItemType)}
+                  className={cn(
+                    'px-6 py-3 rounded-xl font-medium text-lg transition-all flex items-center gap-2',
+                    selectedType === key
+                      ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white'
+                      : count === 0
+                        ? 'bg-white/5 text-gray-600 cursor-not-allowed'
+                        : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                  )}
+                  disabled={count === 0}
+                >
+                  <span>{TYPE_ICONS[key]}</span>
+                  {config.label}
+                  <span
+                    className={cn(
+                      'ml-1 px-2 py-0.5 rounded-full text-sm font-bold',
+                      selectedType === key
+                        ? 'bg-white/25 text-white'
+                        : count === 0
+                          ? 'bg-white/5 text-gray-600'
+                          : 'bg-white/10 text-gray-400'
+                    )}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -260,12 +336,7 @@ export const OnSiteKanban: React.FC = () => {
                             className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
                             style={{ backgroundColor: typeConfig.color + '40' }}
                           >
-                            {item.type === 'lightstick' && '💡'}
-                            {item.type === 'banner' && '🎏'}
-                            {item.type === 'sticker' && '🌟'}
-                            {item.type === 'freepack' && '🎁'}
-                            {item.type === 'lottery' && '🎰'}
-                            {item.type === 'other' && '📦'}
+                            {TYPE_ICONS[item.type]}
                           </div>
                           <div>
                             <h3 className="text-2xl font-bold text-white">{item.name}</h3>
@@ -337,14 +408,14 @@ export const OnSiteKanban: React.FC = () => {
               最新领取记录
             </h2>
             <div className="bg-white/5 rounded-2xl border border-gray-700 overflow-hidden">
-              {recentRecords.length === 0 ? (
+              {filteredRecords.length === 0 ? (
                 <div className="p-12 text-center">
                   <Users size={64} className="mx-auto text-gray-600 mb-4" />
                   <p className="text-xl text-gray-400">暂无领取记录</p>
                 </div>
               ) : (
                 <div className="divide-y divide-gray-700 max-h-[700px] overflow-y-auto">
-                  {recentRecords.map((record, index) => {
+                  {filteredRecords.map((record, index) => {
                     const item = activityItems.find((i) => i.id === record.itemId);
                     const typeConfig = item ? ITEM_TYPE_CONFIG[item.type] : null;
 
@@ -361,12 +432,7 @@ export const OnSiteKanban: React.FC = () => {
                             className="w-14 h-14 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
                             style={{ backgroundColor: (typeConfig?.color || '#6b7280') + '40' }}
                           >
-                            {item?.type === 'lightstick' && '💡'}
-                            {item?.type === 'banner' && '🎏'}
-                            {item?.type === 'sticker' && '🌟'}
-                            {item?.type === 'freepack' && '🎁'}
-                            {item?.type === 'lottery' && '🎰'}
-                            {(!item || item.type === 'other') && '📦'}
+                            {item ? TYPE_ICONS[item.type] : '📦'}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3 mb-2">
