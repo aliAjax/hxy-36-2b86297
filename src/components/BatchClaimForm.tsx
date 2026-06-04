@@ -59,7 +59,7 @@ const parseRow = (line: string, lineNumber: number): ParsedRow | null => {
   const contact = parts[1] || '';
   const itemName = parts[2] || '';
   const quantityStr = parts[3] || '';
-  const quantity = quantityStr ? parseInt(quantityStr) : 1;
+  const quantity = quantityStr ? Number(quantityStr) : 1;
   const note = parts.slice(4).join(separator).trim();
 
   return {
@@ -162,7 +162,10 @@ export const BatchClaimForm: React.FC<BatchClaimFormProps> = ({
 
       const claimKey = `${row.claimerName.trim().toLowerCase()}|${matchedItem.id}`;
       const previousLines = batchClaims.get(claimKey) || [];
+      let isBatchDuplicate = false;
+
       if (previousLines.length > 0) {
+        isBatchDuplicate = true;
         validated.warnings.push({
           type: 'duplicate',
           message: `本批次内重复领取（第 ${previousLines.join('、')} 行已领取）`,
@@ -173,8 +176,6 @@ export const BatchClaimForm: React.FC<BatchClaimFormProps> = ({
             message: `本批次内重复领取，可勾选"强制导入重复记录"跳过此检查`,
           });
         }
-      } else {
-        batchClaims.set(claimKey, [...previousLines, row.lineNumber]);
       }
 
       const isHistoricalDuplicate = checkDuplicateClaim(activityId, matchedItem.id, row.claimerName);
@@ -183,7 +184,7 @@ export const BatchClaimForm: React.FC<BatchClaimFormProps> = ({
           type: 'duplicate',
           message: `「${row.claimerName}」已领取过「${matchedItem.name}」`,
         });
-        if (!forceAddDuplicates && validated.errors.filter(e => e.type === 'duplicate').length === 0) {
+        if (!forceAddDuplicates && !isBatchDuplicate) {
           validated.errors.push({
             type: 'duplicate',
             message: `重复领取，可勾选"强制导入重复记录"跳过此检查`,
@@ -191,8 +192,14 @@ export const BatchClaimForm: React.FC<BatchClaimFormProps> = ({
         }
       }
 
+      if (forceAddDuplicates || (!isBatchDuplicate && !isHistoricalDuplicate)) {
+        batchClaims.set(claimKey, [...previousLines, row.lineNumber]);
+      }
+
+      const hasOtherErrors = validated.errors.filter(e => e.type !== 'duplicate').length > 0;
       const hasDuplicateError = validated.errors.some(e => e.type === 'duplicate');
-      if (!hasDuplicateError) {
+
+      if (!hasOtherErrors && (forceAddDuplicates || !hasDuplicateError)) {
         const allocated = stockAllocated.get(matchedItem.id) || 0;
         const availableStock = matchedItem.currentStock - allocated;
 
