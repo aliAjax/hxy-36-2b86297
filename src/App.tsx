@@ -5,6 +5,7 @@ import { ActivityDetail } from "@/pages/ActivityDetail";
 import { DataManagement } from "@/pages/DataManagement";
 import { ImageLibrary } from "@/pages/ImageLibrary";
 import { OnSiteKanban } from "@/pages/OnSiteKanban";
+import { MaterialTemplateLibrary } from "@/pages/MaterialTemplateLibrary";
 import { ActivityReviewReport } from "@/components/ActivityReviewReport";
 
 export default function App() {
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/activity/:id/report" element={<ActivityReviewReport />} />
           <Route path="/data" element={<DataManagement />} />
           <Route path="/images" element={<ImageLibrary />} />
+          <Route path="/templates" element={<MaterialTemplateLibrary />} />
         </Routes>
       </div>
     </Router>

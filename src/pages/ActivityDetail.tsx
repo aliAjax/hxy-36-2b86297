@@ -20,6 +20,8 @@ import {
   Monitor,
   Upload,
   FileText,
+  BookTemplate,
+  Copy,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { StatsCard } from '@/components/StatsCard';
@@ -36,6 +38,8 @@ import { TodoForm } from '@/components/TodoForm';
 import { PreClaimantItem } from '@/components/PreClaimantItem';
 import { PreClaimantForm } from '@/components/PreClaimantForm';
 import { BatchClaimForm } from '@/components/BatchClaimForm';
+import { SaveAsTemplateDialog } from '@/components/SaveAsTemplateDialog';
+import { ApplyTemplateDialog } from '@/components/ApplyTemplateDialog';
 import { Modal } from '@/components/Modal';
 import { formatDate, cn } from '@/utils/helpers';
 import { Item, PurchaseItem, Todo, PreClaimant, ACTIVITY_STATUS_CONFIG } from '@/types';
@@ -79,6 +83,8 @@ export const ActivityDetail: React.FC = () => {
   const [isTodoFormOpen, setIsTodoFormOpen] = useState(false);
   const [isPreClaimantFormOpen, setIsPreClaimantFormOpen] = useState(false);
   const [isBatchClaimFormOpen, setIsBatchClaimFormOpen] = useState(false);
+  const [isSaveAsTemplateOpen, setIsSaveAsTemplateOpen] = useState(false);
+  const [isApplyTemplateOpen, setIsApplyTemplateOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [editingPurchaseItem, setEditingPurchaseItem] = useState<PurchaseItem | null>(null);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
@@ -559,6 +565,22 @@ export const ActivityDetail: React.FC = () => {
                     <Plus size={18} />
                     添加物资
                   </button>
+                  <button
+                    onClick={() => setIsApplyTemplateOpen(true)}
+                    className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-medium hover:from-green-600 hover:to-emerald-600 transition-all shadow-sm"
+                  >
+                    <Copy size={18} />
+                    从模板创建
+                  </button>
+                  {activityItems.length > 0 && (
+                    <button
+                      onClick={() => setIsSaveAsTemplateOpen(true)}
+                      className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-medium hover:from-amber-600 hover:to-orange-600 transition-all shadow-sm"
+                    >
+                      <BookTemplate size={18} />
+                      存为模板
+                    </button>
+                  )}
                 </div>
 
                 {filteredItems.length === 0 ? (
@@ -941,6 +963,32 @@ export const ActivityDetail: React.FC = () => {
           setTimeout(() => setShowSuccessToast(false), 4000);
         }}
       />
+
+      <SaveAsTemplateDialog
+        isOpen={isSaveAsTemplateOpen}
+        onClose={() => setIsSaveAsTemplateOpen(false)}
+        activityId={id!}
+        items={activityItems}
+        onSuccess={() => {
+          setToastMessage('已保存为物资模板！');
+          setShowSuccessToast(true);
+          setTimeout(() => setShowSuccessToast(false), 3000);
+        }}
+      />
+
+      {isApplyTemplateOpen && (
+        <ApplyTemplateDialog
+          isOpen={true}
+          onClose={() => setIsApplyTemplateOpen(false)}
+          preselectedActivityId={id!}
+          onSuccess={(count) => {
+            setIsApplyTemplateOpen(false);
+            setToastMessage(`已从模板创建 ${count} 项物资`);
+            setShowSuccessToast(true);
+            setTimeout(() => setShowSuccessToast(false), 3000);
+          }}
+        />
+      )}
 
       <Modal
         isOpen={!!deleteItemConfirm}

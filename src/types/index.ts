@@ -75,6 +75,34 @@ export interface PurchaseItem {
   createdAt: string;
 }
 
+export interface MaterialTemplateItem {
+  name: string;
+  type: ItemType;
+  designUrl: string;
+  budget: number;
+  supplier: string;
+  totalStock: number;
+  distributionRule: string;
+  note: string;
+}
+
+export interface MaterialTemplate {
+  id: string;
+  name: string;
+  description: string;
+  items: MaterialTemplateItem[];
+  sourceActivityId: string;
+  sourceActivityName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TemplateApplyAdjustments {
+  stockMultiplier: number;
+  budgetMultiplier: number;
+  supplierOverride: string;
+}
+
 export interface AppData {
   activities: Activity[];
   items: Item[];
@@ -82,6 +110,7 @@ export interface AppData {
   purchaseItems: PurchaseItem[];
   todos: Todo[];
   preClaimants: PreClaimant[];
+  materialTemplates: MaterialTemplate[];
 }
 
 export interface ActivityStats {

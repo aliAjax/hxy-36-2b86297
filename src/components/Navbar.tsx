@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Sparkles, Database, Home, Image } from 'lucide-react';
+import { Sparkles, Database, Home, Image, BookTemplate } from 'lucide-react';
 import { cn } from '@/utils/helpers';
 
 export const Navbar: React.FC = () => {
@@ -8,6 +8,7 @@ export const Navbar: React.FC = () => {
 
   const navItems = [
     { path: '/', label: '活动列表', icon: Home },
+    { path: '/templates', label: '模板库', icon: BookTemplate },
     { path: '/images', label: '图片库', icon: Image },
     { path: '/data', label: '数据管理', icon: Database },
   ];

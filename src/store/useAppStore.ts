@@ -15,6 +15,9 @@ import {
   PreClaimant,
   HealthCheckResult,
   HealthIssue,
+  MaterialTemplate,
+  MaterialTemplateItem,
+  TemplateApplyAdjustments,
 } from '@/types';
 import { generateId, getDateKey } from '@/utils/helpers';
 
@@ -25,6 +28,8 @@ interface AppState {
   purchaseItems: PurchaseItem[];
   todos: Todo[];
   preClaimants: PreClaimant[];
+
+  materialTemplates: MaterialTemplate[];
 
   addActivity: (data: Omit<Activity, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateActivity: (id: string, data: Partial<Activity>) => void;
@@ -73,6 +78,21 @@ interface AppState {
   deletePreClaimant: (id: string) => void;
   findPreClaimantByName: (activityId: string, name: string) => PreClaimant | undefined;
 
+  addMaterialTemplate: (data: Omit<MaterialTemplate, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  updateMaterialTemplate: (id: string, data: Partial<MaterialTemplate>) => void;
+  deleteMaterialTemplate: (id: string) => void;
+  saveActivityAsTemplate: (
+    activityId: string,
+    templateName: string,
+    description: string,
+    selectedItemIds?: string[]
+  ) => { success: boolean; template?: MaterialTemplate; error?: string };
+  applyTemplateToActivity: (
+    templateId: string,
+    targetActivityId: string,
+    adjustments: TemplateApplyAdjustments
+  ) => { success: boolean; createdItems: Item[]; error?: string };
+
   exportData: () => string;
   importData: (data: AppData) => { success: boolean; error?: string };
   clearAllData: () => void;
@@ -110,6 +130,7 @@ export const useAppStore = create<AppState>()(
       purchaseItems: [],
       todos: [],
       preClaimants: [],
+      materialTemplates: [],
 
       addActivity: (data) => {
         const now = new Date().toISOString();
@@ -438,6 +459,119 @@ export const useAppStore = create<AppState>()(
         );
       },
 
+      addMaterialTemplate: (data) => {
+        const now = new Date().toISOString();
+        const newTemplate: MaterialTemplate = {
+          ...data,
+          id: generateId(),
+          createdAt: now,
+          updatedAt: now,
+        };
+        set((state) => ({
+          materialTemplates: [...state.materialTemplates, newTemplate],
+        }));
+      },
+
+      updateMaterialTemplate: (id, data) => {
+        const now = new Date().toISOString();
+        set((state) => ({
+          materialTemplates: state.materialTemplates.map((t) =>
+            t.id === id ? { ...t, ...data, updatedAt: now } : t
+          ),
+        }));
+      },
+
+      deleteMaterialTemplate: (id) => {
+        set((state) => ({
+          materialTemplates: state.materialTemplates.filter((t) => t.id !== id),
+        }));
+      },
+
+      saveActivityAsTemplate: (activityId, templateName, description, selectedItemIds) => {
+        const state = get();
+        const activity = state.activities.find((a) => a.id === activityId);
+        if (!activity) {
+          return { success: false, error: '活动不存在' };
+        }
+
+        const activityItems = selectedItemIds
+          ? state.items.filter((i) => i.activityId === activityId && selectedItemIds.includes(i.id))
+          : state.items.filter((i) => i.activityId === activityId);
+
+        if (activityItems.length === 0) {
+          return { success: false, error: '该活动没有物资可保存为模板' };
+        }
+
+        const templateItems: MaterialTemplateItem[] = activityItems.map((item) => ({
+          name: item.name,
+          type: item.type,
+          designUrl: item.designUrl,
+          budget: item.budget,
+          supplier: item.supplier,
+          totalStock: item.totalStock,
+          distributionRule: item.distributionRule,
+          note: item.note,
+        }));
+
+        const now = new Date().toISOString();
+        const newTemplate: MaterialTemplate = {
+          id: generateId(),
+          name: templateName,
+          description,
+          items: templateItems,
+          sourceActivityId: activityId,
+          sourceActivityName: activity.name,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        set((state) => ({
+          materialTemplates: [...state.materialTemplates, newTemplate],
+        }));
+
+        return { success: true, template: newTemplate };
+      },
+
+      applyTemplateToActivity: (templateId, targetActivityId, adjustments) => {
+        const state = get();
+        const template = state.materialTemplates.find((t) => t.id === templateId);
+        if (!template) {
+          return { success: false, createdItems: [], error: '模板不存在' };
+        }
+
+        const targetActivity = state.activities.find((a) => a.id === targetActivityId);
+        if (!targetActivity) {
+          return { success: false, createdItems: [], error: '目标活动不存在' };
+        }
+
+        const createdItems: Item[] = template.items.map((templateItem) => {
+          const adjustedStock = Math.round(templateItem.totalStock * adjustments.stockMultiplier);
+          const adjustedBudget = Math.round(templateItem.budget * adjustments.budgetMultiplier);
+          const finalSupplier = adjustments.supplierOverride.trim() || templateItem.supplier;
+
+          return {
+            id: generateId(),
+            activityId: targetActivityId,
+            name: templateItem.name,
+            type: templateItem.type,
+            designUrl: templateItem.designUrl,
+            budget: adjustedBudget,
+            supplier: finalSupplier,
+            totalStock: adjustedStock,
+            currentStock: adjustedStock,
+            distributionRule: templateItem.distributionRule,
+            note: templateItem.note,
+            createdAt: new Date().toISOString(),
+          };
+        });
+
+        set((state) => ({
+          items: [...state.items, ...createdItems],
+        }));
+
+        return { success: true, createdItems };
+      },
+
       exportData: () => {
         const state = get();
         const exportObj: AppData = {
@@ -447,6 +581,7 @@ export const useAppStore = create<AppState>()(
           purchaseItems: state.purchaseItems,
           todos: state.todos,
           preClaimants: state.preClaimants,
+          materialTemplates: state.materialTemplates,
         };
         return JSON.stringify(exportObj, null, 2);
       },
@@ -467,6 +602,7 @@ export const useAppStore = create<AppState>()(
             purchaseItems: Array.isArray(data.purchaseItems) ? data.purchaseItems : [],
             todos: Array.isArray(data.todos) ? data.todos : [],
             preClaimants: Array.isArray(data.preClaimants) ? data.preClaimants : [],
+            materialTemplates: Array.isArray(data.materialTemplates) ? data.materialTemplates : [],
           });
           return { success: true };
         } catch (e) {
@@ -482,6 +618,7 @@ export const useAppStore = create<AppState>()(
           purchaseItems: [],
           todos: [],
           preClaimants: [],
+          materialTemplates: [],
         });
       },
 
