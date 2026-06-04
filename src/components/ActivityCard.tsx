@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Package, Edit2, Trash2, Users } from 'lucide-react';
+import { Calendar, Package, Edit2, Trash2, Users, ClipboardList } from 'lucide-react';
 import { Activity, ACTIVITY_STATUS_CONFIG } from '@/types';
 import { formatDate, cn } from '@/utils/helpers';
 import { useAppStore } from '@/store/useAppStore';
@@ -12,12 +12,14 @@ interface ActivityCardProps {
 }
 
 export const ActivityCard: React.FC<ActivityCardProps> = ({ activity, onEdit, onDelete }) => {
-  const { items, records } = useAppStore();
+  const { items, records, todos } = useAppStore();
   const activityItems = items.filter((i) => i.activityId === activity.id);
   const activityRecords = records.filter((r) => r.activityId === activity.id);
+  const activityTodos = todos.filter((t) => t.activityId === activity.id);
   const itemCount = activityItems.length;
   const claimCount = activityRecords.length;
   const uniqueClaimers = new Set(activityRecords.map((r) => r.claimerName)).size;
+  const pendingTodoCount = activityTodos.filter((t) => !t.completed).length;
   const statusConfig = ACTIVITY_STATUS_CONFIG[activity.status];
 
   const handleDelete = (e: React.MouseEvent) => {
@@ -90,7 +92,7 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({ activity, onEdit, on
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="grid grid-cols-4 gap-2 mb-4">
           <div className="text-center p-2 bg-pink-50 rounded-xl">
             <div className="flex items-center justify-center gap-1 text-pink-600 mb-1">
               <Package size={14} />
@@ -111,6 +113,24 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({ activity, onEdit, on
             </div>
             <p className="text-lg font-bold text-gray-800">{uniqueClaimers}</p>
             <p className="text-xs text-gray-500">参与人数</p>
+          </div>
+          <div className={cn(
+            'text-center p-2 rounded-xl',
+            pendingTodoCount > 0 ? 'bg-orange-50' : 'bg-gray-50'
+          )}>
+            <div className={cn(
+              'flex items-center justify-center gap-1 mb-1',
+              pendingTodoCount > 0 ? 'text-orange-600' : 'text-gray-400'
+            )}>
+              <ClipboardList size={14} />
+            </div>
+            <p className={cn(
+              'text-lg font-bold',
+              pendingTodoCount > 0 ? 'text-orange-600' : 'text-gray-800'
+            )}>
+              {pendingTodoCount}
+            </p>
+            <p className="text-xs text-gray-500">待办事项</p>
           </div>
         </div>
 

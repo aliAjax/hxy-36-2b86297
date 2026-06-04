@@ -11,6 +11,7 @@ import {
   TypeDistributionData,
   ItemType,
   ITEM_TYPE_CONFIG,
+  Todo,
 } from '@/types';
 import { generateId, getDateKey } from '@/utils/helpers';
 
@@ -19,10 +20,16 @@ interface AppState {
   items: Item[];
   records: ClaimRecord[];
   purchaseItems: PurchaseItem[];
+  todos: Todo[];
 
   addActivity: (data: Omit<Activity, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateActivity: (id: string, data: Partial<Activity>) => void;
   deleteActivity: (id: string) => void;
+
+  addTodo: (data: Omit<Todo, 'id' | 'createdAt'>) => void;
+  updateTodo: (id: string, data: Partial<Todo>) => void;
+  deleteTodo: (id: string) => void;
+  toggleTodo: (id: string) => void;
 
   addItem: (data: Omit<Item, 'id' | 'createdAt'>) => void;
   updateItem: (id: string, data: Partial<Item>) => void;
@@ -60,6 +67,7 @@ export const useAppStore = create<AppState>()(
       items: [],
       records: [],
       purchaseItems: [],
+      todos: [],
 
       addActivity: (data) => {
         const now = new Date().toISOString();
@@ -89,6 +97,36 @@ export const useAppStore = create<AppState>()(
           items: state.items.filter((i) => i.activityId !== id),
           records: state.records.filter((r) => r.activityId !== id),
           purchaseItems: state.purchaseItems.filter((p) => p.activityId !== id),
+          todos: state.todos.filter((t) => t.activityId !== id),
+        }));
+      },
+
+      addTodo: (data) => {
+        const newTodo: Todo = {
+          ...data,
+          id: generateId(),
+          createdAt: new Date().toISOString(),
+        };
+        set((state) => ({
+          todos: [...state.todos, newTodo],
+        }));
+      },
+
+      updateTodo: (id, data) => {
+        set((state) => ({
+          todos: state.todos.map((t) => (t.id === id ? { ...t, ...data } : t)),
+        }));
+      },
+
+      deleteTodo: (id) => {
+        set((state) => ({
+          todos: state.todos.filter((t) => t.id !== id),
+        }));
+      },
+
+      toggleTodo: (id) => {
+        set((state) => ({
+          todos: state.todos.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)),
         }));
       },
 
@@ -233,6 +271,7 @@ export const useAppStore = create<AppState>()(
           items: state.items,
           records: state.records,
           purchaseItems: state.purchaseItems,
+          todos: state.todos,
         };
         return JSON.stringify(exportObj, null, 2);
       },
@@ -251,6 +290,7 @@ export const useAppStore = create<AppState>()(
             items: data.items,
             records: data.records,
             purchaseItems: Array.isArray(data.purchaseItems) ? data.purchaseItems : [],
+            todos: Array.isArray(data.todos) ? data.todos : [],
           });
           return { success: true };
         } catch (e) {
@@ -264,6 +304,7 @@ export const useAppStore = create<AppState>()(
           items: [],
           records: [],
           purchaseItems: [],
+          todos: [],
         });
       },
 

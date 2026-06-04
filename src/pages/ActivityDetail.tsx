@@ -14,6 +14,8 @@ import {
   Filter,
   ShoppingCart,
   CheckCircle,
+  Clock,
+  ClipboardList,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { StatsCard } from '@/components/StatsCard';
@@ -25,11 +27,13 @@ import { ConsumptionChart } from '@/components/ConsumptionChart';
 import { TypeDistributionChart } from '@/components/TypeDistributionChart';
 import { PurchaseItemForm } from '@/components/PurchaseItemForm';
 import { PurchaseItemCard } from '@/components/PurchaseItemCard';
+import { TodoItem } from '@/components/TodoItem';
+import { TodoForm } from '@/components/TodoForm';
 import { Modal } from '@/components/Modal';
 import { formatDate, cn } from '@/utils/helpers';
-import { Item, PurchaseItem, ACTIVITY_STATUS_CONFIG } from '@/types';
+import { Item, PurchaseItem, Todo, ACTIVITY_STATUS_CONFIG } from '@/types';
 
-type TabType = 'items' | 'records' | 'charts' | 'purchase';
+type TabType = 'items' | 'records' | 'charts' | 'purchase' | 'todos';
 
 export const ActivityDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -39,6 +43,7 @@ export const ActivityDetail: React.FC = () => {
     items,
     records,
     purchaseItems,
+    todos,
     addItem,
     updateItem,
     deleteItem,
@@ -47,6 +52,10 @@ export const ActivityDetail: React.FC = () => {
     updatePurchaseItem,
     deletePurchaseItem,
     convertPurchaseToItem,
+    addTodo,
+    updateTodo,
+    deleteTodo,
+    toggleTodo,
     getActivityStats,
     getItemConsumptionData,
     getTypeDistributionData,
@@ -56,17 +65,22 @@ export const ActivityDetail: React.FC = () => {
   const [isItemFormOpen, setIsItemFormOpen] = useState(false);
   const [isClaimFormOpen, setIsClaimFormOpen] = useState(false);
   const [isPurchaseFormOpen, setIsPurchaseFormOpen] = useState(false);
+  const [isTodoFormOpen, setIsTodoFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [editingPurchaseItem, setEditingPurchaseItem] = useState<PurchaseItem | null>(null);
+  const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const [deleteItemConfirm, setDeleteItemConfirm] = useState<string | null>(null);
   const [deleteRecordConfirm, setDeleteRecordConfirm] = useState<string | null>(null);
   const [deletePurchaseConfirm, setDeletePurchaseConfirm] = useState<string | null>(null);
+  const [deleteTodoConfirm, setDeleteTodoConfirm] = useState<string | null>(null);
   const [convertPurchaseConfirm, setConvertPurchaseConfirm] = useState<string | null>(null);
   const [itemSearchQuery, setItemSearchQuery] = useState('');
   const [recordSearchQuery, setRecordSearchQuery] = useState('');
   const [purchaseSearchQuery, setPurchaseSearchQuery] = useState('');
+  const [todoSearchQuery, setTodoSearchQuery] = useState('');
   const [filterItemType, setFilterItemType] = useState<string>('all');
   const [filterPurchaseStatus, setFilterPurchaseStatus] = useState<string>('all');
+  const [filterTodoStatus, setFilterTodoStatus] = useState<string>('all');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
@@ -82,6 +96,15 @@ export const ActivityDetail: React.FC = () => {
   const activityPurchaseItems = useMemo(
     () => purchaseItems.filter((p) => p.activityId === id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [purchaseItems, id]
+  );
+  const activityTodos = useMemo(
+    () => todos.filter((t) => t.activityId === id).sort((a, b) => {
+      if (a.completed !== b.completed) {
+        return a.completed ? 1 : -1;
+      }
+      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    }),
+    [todos, id]
   );
   const stats = id ? getActivityStats(id) : null;
   const consumptionData = id ? getItemConsumptionData(id) : [];
@@ -117,10 +140,39 @@ export const ActivityDetail: React.FC = () => {
     });
   }, [activityPurchaseItems, purchaseSearchQuery, filterPurchaseStatus]);
 
+  const filteredTodos = useMemo(() => {
+    return activityTodos.filter((todo) => {
+      const matchesSearch = todo.title.toLowerCase().includes(todoSearchQuery.toLowerCase());
+      const matchesStatus =
+        filterTodoStatus === 'all' ||
+        (filterTodoStatus === 'pending' && !todo.completed) ||
+        (filterTodoStatus === 'completed' && todo.completed) ||
+        (filterTodoStatus === 'overdue' && !todo.completed && new Date(todo.dueDate) < new Date(new Date().toDateString()));
+      return matchesSearch && matchesStatus;
+    });
+  }, [activityTodos, todoSearchQuery, filterTodoStatus]);
+
+  const pendingTodoCount = activityTodos.filter((t) => !t.completed).length;
+
+  const getCountdownText = () => {
+    if (!activity) return '';
+    const now = new Date();
+    const activityDate = new Date(activity.date);
+    const diffTime = activityDate.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) return '活动已结束';
+    if (diffDays === 0) return '今天';
+    if (diffDays === 1) return '明天';
+    if (diffDays <= 7) return `${diffDays} 天后`;
+    return `${diffDays} 天后`;
+  };
+
   const tabs = [
     { id: 'items' as TabType, label: '物资列表', icon: ListTodo, count: activityItems.length },
     { id: 'purchase' as TabType, label: '采购清单', icon: ShoppingCart, count: activityPurchaseItems.length },
     { id: 'records' as TabType, label: '领取记录', icon: Users, count: activityRecords.length },
+    { id: 'todos' as TabType, label: '待办事项', icon: ClipboardList, count: pendingTodoCount },
     { id: 'charts' as TabType, label: '数据图表', icon: BarChart3 },
   ];
 
@@ -224,6 +276,31 @@ export const ActivityDetail: React.FC = () => {
     }
   };
 
+  const handleTodoSubmit = (data: Omit<Todo, 'id' | 'createdAt'>) => {
+    if (editingTodo) {
+      updateTodo(editingTodo.id, data);
+    } else {
+      addTodo(data);
+    }
+    setEditingTodo(null);
+  };
+
+  const handleEditTodo = (todo: Todo) => {
+    setEditingTodo(todo);
+    setIsTodoFormOpen(true);
+  };
+
+  const handleDeleteTodo = (todoId: string) => {
+    setDeleteTodoConfirm(todoId);
+  };
+
+  const confirmDeleteTodo = () => {
+    if (deleteTodoConfirm) {
+      deleteTodo(deleteTodoConfirm);
+      setDeleteTodoConfirm(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-purple-50">
       <div className="relative h-48 overflow-hidden">
@@ -280,6 +357,29 @@ export const ActivityDetail: React.FC = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-10">
+        <div className="bg-gradient-to-r from-pink-500 to-purple-500 rounded-2xl p-6 mb-6 text-white shadow-lg shadow-pink-500/30">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+                <Clock size={28} />
+              </div>
+              <div>
+                <p className="text-white/80 text-sm mb-1">距离活动开始还有</p>
+                <p className="text-3xl font-bold">{getCountdownText()}</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-white/80 text-sm mb-1">待办事项</p>
+              <p className="text-2xl font-bold">
+                <span className={pendingTodoCount > 0 ? 'text-yellow-300' : ''}>
+                  {pendingTodoCount}
+                </span>
+                <span className="text-white/60 text-lg"> / {activityTodos.length}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <StatsCard
@@ -489,6 +589,78 @@ export const ActivityDetail: React.FC = () => {
               </div>
             )}
 
+            {activeTab === 'todos' && (
+              <div>
+                <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      placeholder="搜索待办事项..."
+                      value={todoSearchQuery}
+                      onChange={(e) => setTodoSearchQuery(e.target.value)}
+                      className="w-full pl-11 pr-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="relative">
+                    <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <select
+                      value={filterTodoStatus}
+                      onChange={(e) => setFilterTodoStatus(e.target.value)}
+                      className="pl-11 pr-10 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all appearance-none"
+                    >
+                      <option value="all">全部状态</option>
+                      <option value="pending">待完成</option>
+                      <option value="completed">已完成</option>
+                      <option value="overdue">已逾期</option>
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditingTodo(null);
+                      setIsTodoFormOpen(true);
+                    }}
+                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-xl font-medium hover:from-pink-600 hover:to-purple-600 transition-all shadow-sm"
+                  >
+                    <Plus size={18} />
+                    添加待办
+                  </button>
+                </div>
+
+                {filteredTodos.length === 0 ? (
+                  <div className="text-center py-16">
+                    <div className="w-20 h-20 mx-auto mb-4 bg-pink-50 rounded-full flex items-center justify-center">
+                      <span className="text-3xl">📋</span>
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-800 mb-2">
+                      {activityTodos.length === 0 ? '还没有添加待办事项' : '没有找到匹配的待办事项'}
+                    </h3>
+                    <p className="text-gray-500 mb-4">
+                      {activityTodos.length === 0
+                        ? '点击上方按钮添加待办事项吧'
+                        : '试试其他搜索条件'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredTodos.map((todo, index) => (
+                      <div
+                        key={todo.id}
+                        style={{ animation: `fadeInUp 0.3s ease-out ${index * 0.03}s both` }}
+                      >
+                        <TodoItem
+                          todo={todo}
+                          onToggle={() => toggleTodo(todo.id)}
+                          onDelete={() => handleDeleteTodo(todo.id)}
+                          onEdit={() => handleEditTodo(todo)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {activeTab === 'purchase' && (
               <div>
                 <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -596,6 +768,17 @@ export const ActivityDetail: React.FC = () => {
         purchaseItem={editingPurchaseItem}
       />
 
+      <TodoForm
+        isOpen={isTodoFormOpen}
+        onClose={() => {
+          setIsTodoFormOpen(false);
+          setEditingTodo(null);
+        }}
+        onSubmit={handleTodoSubmit}
+        activityId={id!}
+        todo={editingTodo}
+      />
+
       <Modal
         isOpen={!!deleteItemConfirm}
         onClose={() => setDeleteItemConfirm(null)}
@@ -695,6 +878,32 @@ export const ActivityDetail: React.FC = () => {
           >
             <CheckCircle size={16} className="inline mr-2" />
             确认转换
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={!!deleteTodoConfirm}
+        onClose={() => setDeleteTodoConfirm(null)}
+        title="确认删除待办"
+        size="sm"
+      >
+        <p className="text-gray-600 mb-6">
+          确定要删除这个待办事项吗？该操作无法恢复。
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setDeleteTodoConfirm(null)}
+            className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
+          >
+            取消
+          </button>
+          <button
+            onClick={confirmDeleteTodo}
+            className="flex-1 py-3 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 transition-colors"
+          >
+            <Trash2 size={16} className="inline mr-2" />
+            确认删除
           </button>
         </div>
       </Modal>

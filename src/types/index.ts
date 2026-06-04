@@ -4,6 +4,16 @@ export type ActivityStatus = 'upcoming' | 'ongoing' | 'completed';
 
 export type PurchaseStatus = 'pending' | 'ordered' | 'shipped' | 'completed' | 'cancelled';
 
+export interface Todo {
+  id: string;
+  activityId: string;
+  title: string;
+  dueDate: string;
+  completed: boolean;
+  note: string;
+  createdAt: string;
+}
+
 export interface Activity {
   id: string;
   name: string;
@@ -60,6 +70,7 @@ export interface AppData {
   items: Item[];
   records: ClaimRecord[];
   purchaseItems: PurchaseItem[];
+  todos: Todo[];
 }
 
 export interface ActivityStats {
