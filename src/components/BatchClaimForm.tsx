@@ -192,14 +192,9 @@ export const BatchClaimForm: React.FC<BatchClaimFormProps> = ({
         }
       }
 
-      if (forceAddDuplicates || (!isBatchDuplicate && !isHistoricalDuplicate)) {
-        batchClaims.set(claimKey, [...previousLines, row.lineNumber]);
-      }
-
-      const hasOtherErrors = validated.errors.filter(e => e.type !== 'duplicate').length > 0;
       const hasDuplicateError = validated.errors.some(e => e.type === 'duplicate');
 
-      if (!hasOtherErrors && (forceAddDuplicates || !hasDuplicateError)) {
+      if (!hasDuplicateError || forceAddDuplicates) {
         const allocated = stockAllocated.get(matchedItem.id) || 0;
         const availableStock = matchedItem.currentStock - allocated;
 
@@ -208,7 +203,16 @@ export const BatchClaimForm: React.FC<BatchClaimFormProps> = ({
             type: 'stock_insufficient',
             message: `库存不足，当前可用 ${availableStock} 个（已被本批次其他记录占用 ${allocated} 个）`,
           });
-        } else {
+        }
+      }
+
+      const willImport = validated.errors.length === 0 || (forceAddDuplicates && !validated.errors.some(e => e.type !== 'duplicate'));
+
+      if (willImport) {
+        batchClaims.set(claimKey, [...previousLines, row.lineNumber]);
+
+        if (!validated.errors.some(e => e.type !== 'duplicate')) {
+          const allocated = stockAllocated.get(matchedItem.id) || 0;
           stockAllocated.set(matchedItem.id, allocated + row.quantity);
         }
       }
