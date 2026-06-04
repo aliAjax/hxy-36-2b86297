@@ -2,7 +2,7 @@
 // Run with: npx ts-node --esm src/scripts/verify-template-independence.mts
 
 import { useAppStore } from '../store/useAppStore';
-import { MaterialTemplateItem } from '../types';
+import { MaterialTemplate, MaterialTemplateItem } from '../types';
 
 const { getState } = useAppStore;
 
@@ -85,7 +85,7 @@ async function runVerification() {
   }
 
   const templateId = saveResult.template.id;
-  const templateSnapshot = JSON.parse(JSON.stringify(saveResult.template));
+  let templateSnapshot: MaterialTemplate; // Will be set in step4 after editing
   console.log(`  ✅ 模板创建成功，包含 ${saveResult.template.items.length} 项物资配置`);
   console.log(`     模板 ID: ${templateId.slice(0, 12)}...`);
   console.log();
@@ -169,8 +169,13 @@ async function runVerification() {
     items: updatedTemplateItems,
   });
 
+  // 反向验证基准：基于编辑后的最新模板状态拍摄快照
+  templateSnapshot = JSON.parse(
+    JSON.stringify(getState().materialTemplates.find((t) => t.id === templateId)!)
+  );
+
   const templateAfterEdit = getState().materialTemplates.find((t) => t.id === templateId);
-  console.log(`  ✅ 模板已修改：`);
+  console.log(`  ✅ 模板已修改，反向验证基准快照已更新：`);
   templateAfterEdit?.items.forEach((item) => {
     console.log(`     - ${item.name}: 库存=${item.totalStock}, 预算=¥${item.budget}, 供应商=${item.supplier}`);
   });
@@ -183,7 +188,7 @@ async function runVerification() {
   const mismatches: string[] = [];
   let comparisonCount = 0;
 
-  console.log(`  📊 开始比较：${currentItems.length} 项物资 × 4 个字段 = ${currentItems.length * 4} 次比较`);
+  console.log(`  📊 开始比较：${currentItems.length} 项物资 × 8 个字段 = ${currentItems.length * 8} 次比较`);
   console.log();
 
   if (currentItems.length !== snapshot.size) {
@@ -199,14 +204,14 @@ async function runVerification() {
       return;
     }
 
-    const fieldsToCheck = ['name', 'totalStock', 'budget', 'supplier'] as const;
+    const fieldsToCheck = ['name', 'type', 'designUrl', 'budget', 'supplier', 'totalStock', 'distributionRule', 'note'] as const;
     fieldsToCheck.forEach((field) => {
       comparisonCount++;
       const currentVal = item[field];
       const snapshotVal = snapItem[field];
       if (currentVal !== snapshotVal) {
         mismatches.push(
-          `${item.name}: ${field} 不匹配！快照=${snapshotVal}, 当前=${currentVal}`
+          `${item.name} → ${field}: 快照=${snapshotVal}, 当前=${currentVal}`
         );
         console.error(`     ❌ ${item.name} → ${field}: 快照=${snapshotVal}, 当前=${currentVal}`);
       } else {
@@ -216,7 +221,7 @@ async function runVerification() {
   });
 
   // CRITICAL: Verify that comparisons actually ran
-  const expectedComparisons = currentItems.length * 4;
+  const expectedComparisons = currentItems.length * 8;
   if (comparisonCount !== expectedComparisons) {
     console.error();
     console.error(`❌ 比较执行次数异常！预期 ${expectedComparisons} 次比较，实际只执行了 ${comparisonCount} 次`);
@@ -254,12 +259,11 @@ async function runVerification() {
     });
 
   const templateAfterActivityEdit = getState().materialTemplates.find((t) => t.id === templateId);
-  let reverseMismatch = false;
-  let reverseMismatchDetail = '';
+  const reverseMismatches: string[] = [];
   let reverseComparisonCount = 0;
 
   console.log();
-  console.log(`  📊 开始反向比较：${templateSnapshot.items.length} 项物资 × 3 个字段 = ${templateSnapshot.items.length * 3} 次比较`);
+  console.log(`  📊 开始反向比较：${templateSnapshot.items.length} 项物资 × 8 个字段 = ${templateSnapshot.items.length * 8} 次比较`);
   console.log();
 
   if (!templateAfterActivityEdit) {
@@ -268,44 +272,45 @@ async function runVerification() {
   }
 
   if (templateAfterActivityEdit.items.length !== templateSnapshot.items.length) {
-    console.error('❌ 模板物资数量变化了！');
+    console.error(`❌ 模板物资数量变化了！编辑前 ${templateSnapshot.items.length} 项，编辑后 ${templateAfterActivityEdit.items.length} 项`);
     process.exit(1);
   }
 
   for (let i = 0; i < templateSnapshot.items.length; i++) {
     const original = templateSnapshot.items[i];
     const current = templateAfterActivityEdit.items[i];
-    const fieldsToCheck = ['name', 'totalStock', 'budget'] as const;
+    const fieldsToCheck = ['name', 'type', 'designUrl', 'budget', 'supplier', 'totalStock', 'distributionRule', 'note'] as const;
     fieldsToCheck.forEach((field) => {
       reverseComparisonCount++;
       const originalVal = original[field];
       const currentVal = current[field];
       if (originalVal !== currentVal) {
-        reverseMismatch = true;
-        reverseMismatchDetail = `第 ${i + 1} 项物资 ${field} 不匹配：原始=${originalVal}, 当前=${currentVal}`;
-        console.error(`     ❌ ${original.name} → ${field}: 快照=${originalVal}, 当前=${currentVal}`);
+        reverseMismatches.push(
+          `物资 #${i + 1} "${original.name}" → ${field}: 基准=${originalVal}, 当前=${currentVal}`
+        );
+        console.error(`     ❌ ${original.name} → ${field}: 基准=${originalVal}, 当前=${currentVal}`);
       } else {
         console.log(`     ✅ ${original.name} → ${field}: ${currentVal} (正确)`);
       }
     });
-    if (reverseMismatch) break;
   }
 
-  const expectedReverseComparisons = templateSnapshot.items.length * 3;
+  const expectedReverseComparisons = templateSnapshot.items.length * 8;
   if (reverseComparisonCount !== expectedReverseComparisons) {
     console.error();
     console.error(`❌ 反向比较执行次数异常！预期 ${expectedReverseComparisons} 次，实际 ${reverseComparisonCount} 次`);
     process.exit(1);
   }
 
-  if (reverseMismatch) {
+  if (reverseMismatches.length > 0) {
     console.error();
-    console.error(`❌ 反向验证失败！${reverseMismatchDetail}`);
+    console.error(`❌ 反向验证失败！检测到 ${reverseMismatches.length} 处不匹配：`);
+    reverseMismatches.forEach((m, i) => console.error(`   ${i + 1}. ${m}`));
     process.exit(1);
   }
 
   console.log();
-  console.log(`  ✅ 反向验证通过！执行了 ${reverseComparisonCount} 次比较，全部匹配`);
+  console.log(`  ✅ 反向验证通过！执行了 ${reverseComparisonCount} 次比较（每项 8 个字段），全部匹配`);
   console.log(`     活动物资编辑没有影响模板`);
   console.log();
 

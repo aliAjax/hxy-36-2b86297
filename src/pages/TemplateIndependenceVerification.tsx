@@ -408,13 +408,18 @@ export const TemplateIndependenceVerification: React.FC = () => {
 
       setTestDataCreated(true);
     } catch (error) {
-      const currentStep = steps.find((s) => s.status === 'running');
-      if (currentStep) {
-        updateStep(currentStep.id, {
-          status: 'failed',
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      setSteps((prev) => {
+        const currentStep = prev.find((s) => s.status === 'running');
+        if (currentStep) {
+          return prev.map((s) =>
+            s.id === currentStep.id
+              ? { ...s, status: 'failed' as const, error: errorMsg }
+              : s
+          );
+        }
+        return prev;
+      });
     } finally {
       setIsRunning(false);
     }
