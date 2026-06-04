@@ -114,7 +114,7 @@ export const BatchClaimForm: React.FC<BatchClaimFormProps> = ({
     const stockAllocated = new Map<string, number>();
     const batchClaims = new Map<string, number[]>();
 
-    return parsedRows.map((row, index) => {
+    return parsedRows.map((row) => {
       const validated: ValidatedRow = {
         ...row,
         errors: [],

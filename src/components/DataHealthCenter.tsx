@@ -71,30 +71,36 @@ export const DataHealthCenter: React.FC = () => {
     let result: { count: number; message: string };
 
     switch (showFixConfirm.issueType) {
-      case 'orphan_item':
+      case 'orphan_item': {
         const orphanResult = fixOrphanItems();
         result = { count: orphanResult.deletedCount, message: `已删除 ${orphanResult.deletedCount} 个孤儿物资` };
         break;
-      case 'orphan_record':
+      }
+      case 'orphan_record': {
         const recordResult = fixOrphanRecords();
         result = { count: recordResult.deletedCount, message: `已删除 ${recordResult.deletedCount} 条孤儿领取记录` };
         break;
-      case 'negative_stock':
+      }
+      case 'negative_stock': {
         const stockResult = fixNegativeStock();
         result = { count: stockResult.fixedCount, message: `已修复 ${stockResult.fixedCount} 个负库存物资` };
         break;
-      case 'stock_mismatch':
+      }
+      case 'stock_mismatch': {
         const mismatchResult = fixStockMismatch();
         result = { count: mismatchResult.fixedCount, message: `已修复 ${mismatchResult.fixedCount} 个库存不一致的物资` };
         break;
-      case 'missing_activity_date':
+      }
+      case 'missing_activity_date': {
         const dateResult = fixMissingActivityDate();
         result = { count: dateResult.fixedCount, message: `已修复 ${dateResult.fixedCount} 个日期缺失的活动` };
         break;
-      case 'missing_activity_status':
+      }
+      case 'missing_activity_status': {
         const statusResult = fixMissingActivityStatus();
         result = { count: statusResult.fixedCount, message: `已修复 ${statusResult.fixedCount} 个状态缺失的活动` };
         break;
+      }
       default:
         return;
     }
