@@ -13,7 +13,6 @@ import {
   Search,
   Filter,
   ShoppingCart,
-  CheckCircle,
   Clock,
   ClipboardList,
   UserCheck,
@@ -36,6 +35,7 @@ import { ConsumptionChart } from '@/components/ConsumptionChart';
 import { TypeDistributionChart } from '@/components/TypeDistributionChart';
 import { PurchaseItemForm } from '@/components/PurchaseItemForm';
 import { PurchaseItemCard } from '@/components/PurchaseItemCard';
+import { PurchaseConvertDialog } from '@/components/PurchaseConvertDialog';
 import { TodoItem } from '@/components/TodoItem';
 import { TodoForm } from '@/components/TodoForm';
 import { PreClaimantItem } from '@/components/PreClaimantItem';
@@ -97,7 +97,7 @@ export const ActivityDetail: React.FC = () => {
   const [deletePurchaseConfirm, setDeletePurchaseConfirm] = useState<string | null>(null);
   const [deleteTodoConfirm, setDeleteTodoConfirm] = useState<string | null>(null);
   const [deletePreClaimantConfirm, setDeletePreClaimantConfirm] = useState<string | null>(null);
-  const [convertPurchaseConfirm, setConvertPurchaseConfirm] = useState<string | null>(null);
+  const [convertPurchaseItem, setConvertPurchaseItem] = useState<PurchaseItem | null>(null);
   const [itemSearchQuery, setItemSearchQuery] = useState('');
   const [recordSearchQuery, setRecordSearchQuery] = useState('');
   const [purchaseSearchQuery, setPurchaseSearchQuery] = useState('');
@@ -327,18 +327,22 @@ export const ActivityDetail: React.FC = () => {
   };
 
   const handleConvertPurchaseItem = (purchaseId: string) => {
-    setConvertPurchaseConfirm(purchaseId);
+    const item = purchaseItems.find((p) => p.id === purchaseId);
+    if (item) {
+      setConvertPurchaseItem(item);
+    }
   };
 
-  const confirmConvertPurchaseItem = () => {
-    if (convertPurchaseConfirm) {
-      const result = convertPurchaseToItem(convertPurchaseConfirm);
+  const confirmConvertPurchaseItem = (data: { designUrl: string; distributionRule: string; note: string }) => {
+    if (convertPurchaseItem) {
+      const result = convertPurchaseToItem(convertPurchaseItem.id, data);
       if (result.success) {
-        setToastMessage('已成功转为正式物资！');
+        setToastMessage('已成功转为正式物资！已自动跳转至物资列表。');
         setShowSuccessToast(true);
-        setTimeout(() => setShowSuccessToast(false), 3000);
+        setTimeout(() => setShowSuccessToast(false), 4000);
+        setActiveTab('items');
       }
-      setConvertPurchaseConfirm(null);
+      setConvertPurchaseItem(null);
     }
   };
 
@@ -1166,31 +1170,12 @@ export const ActivityDetail: React.FC = () => {
         </div>
       </Modal>
 
-      <Modal
-        isOpen={!!convertPurchaseConfirm}
-        onClose={() => setConvertPurchaseConfirm(null)}
-        title="确认转为正式物资"
-        size="sm"
-      >
-        <p className="text-gray-600 mb-6">
-          确定要将这个采购计划转为正式物资吗？转换后该采购计划将被移除，并在物资列表中新增一条正式物资记录。
-        </p>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setConvertPurchaseConfirm(null)}
-            className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
-          >
-            取消
-          </button>
-          <button
-            onClick={confirmConvertPurchaseItem}
-            className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-medium hover:from-green-600 hover:to-emerald-600 transition-all"
-          >
-            <CheckCircle size={16} className="inline mr-2" />
-            确认转换
-          </button>
-        </div>
-      </Modal>
+      <PurchaseConvertDialog
+        isOpen={!!convertPurchaseItem}
+        onClose={() => setConvertPurchaseItem(null)}
+        onConfirm={confirmConvertPurchaseItem}
+        purchaseItem={convertPurchaseItem}
+      />
 
       <Modal
         isOpen={!!deleteTodoConfirm}

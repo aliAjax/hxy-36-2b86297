@@ -71,7 +71,7 @@ interface AppState {
   addPurchaseItem: (data: Omit<PurchaseItem, 'id' | 'createdAt'>) => void;
   updatePurchaseItem: (id: string, data: Partial<PurchaseItem>) => void;
   deletePurchaseItem: (id: string) => void;
-  convertPurchaseToItem: (purchaseId: string) => { success: boolean; item?: Item; error?: string };
+  convertPurchaseToItem: (purchaseId: string, extraData?: { designUrl?: string; distributionRule?: string; note?: string }) => { success: boolean; item?: Item; error?: string };
 
   addPreClaimant: (data: Omit<PreClaimant, 'id' | 'createdAt'>) => void;
   updatePreClaimant: (id: string, data: Partial<PreClaimant>) => void;
@@ -390,7 +390,7 @@ export const useAppStore = create<AppState>()(
         }));
       },
 
-      convertPurchaseToItem: (purchaseId) => {
+      convertPurchaseToItem: (purchaseId, extraData) => {
         const state = get();
         const purchaseItem = state.purchaseItems.find((p) => p.id === purchaseId);
 
@@ -407,13 +407,13 @@ export const useAppStore = create<AppState>()(
           activityId: purchaseItem.activityId,
           name: purchaseItem.name,
           type: purchaseItem.type,
-          designUrl: '',
+          designUrl: extraData?.designUrl || '',
           budget: purchaseItem.budget,
           supplier: purchaseItem.supplier,
           totalStock: purchaseItem.expectedQuantity,
           currentStock: purchaseItem.expectedQuantity,
-          distributionRule: '',
-          note: purchaseItem.note,
+          distributionRule: extraData?.distributionRule || '',
+          note: extraData?.note !== undefined ? extraData.note : purchaseItem.note,
           createdAt: new Date().toISOString(),
         };
 
