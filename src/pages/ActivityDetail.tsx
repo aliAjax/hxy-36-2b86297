@@ -38,7 +38,7 @@ import { PurchaseItemCard } from '@/components/PurchaseItemCard';
 import { PurchaseConvertDialog } from '@/components/PurchaseConvertDialog';
 import { TodoItem } from '@/components/TodoItem';
 import { TodoForm } from '@/components/TodoForm';
-import { PreClaimantItem } from '@/components/PreClaimantItem';
+import { PreClaimantItem, ClaimStatus } from '@/components/PreClaimantItem';
 import { PreClaimantForm } from '@/components/PreClaimantForm';
 import { BatchClaimForm } from '@/components/BatchClaimForm';
 import { SaveAsTemplateDialog } from '@/components/SaveAsTemplateDialog';
@@ -106,6 +106,7 @@ export const ActivityDetail: React.FC = () => {
   const [filterItemType, setFilterItemType] = useState<string>('all');
   const [filterPurchaseStatus, setFilterPurchaseStatus] = useState<string>('all');
   const [filterTodoStatus, setFilterTodoStatus] = useState<string>('all');
+  const [filterPreClaimantStatus, setFilterPreClaimantStatus] = useState<string>('all');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
@@ -206,16 +207,45 @@ export const ActivityDetail: React.FC = () => {
     });
   }, [activityTodos, todoSearchQuery, filterTodoStatus]);
 
+  const preClaimantStatusMap = useMemo(() => {
+    const statusMap = new Map<string, ClaimStatus>();
+    activityPreClaimants.forEach((preClaimant) => {
+      const claimantRecords = activityRecords.filter(
+        (r) => r.claimerName.trim().toLowerCase() === preClaimant.name.trim().toLowerCase()
+      );
+      
+      let status: ClaimStatus = 'not-claimed';
+      if (claimantRecords.length > 0) {
+        const expectedItems = preClaimant.expectedItems.trim();
+        if (expectedItems) {
+          const expectedItemCount = (expectedItems.match(/[、,，]/g) || []).length + 1;
+          const claimedItemCount = new Set(claimantRecords.map((r) => r.itemId)).size;
+          status = claimedItemCount >= expectedItemCount ? 'fully-claimed' : 'partial-claimed';
+        } else {
+          status = 'fully-claimed';
+        }
+      }
+      statusMap.set(preClaimant.id, status);
+    });
+    return statusMap;
+  }, [activityPreClaimants, activityRecords]);
+
   const filteredPreClaimants = useMemo(() => {
     return activityPreClaimants.filter((p) => {
       const q = preClaimantSearchQuery.toLowerCase();
-      return (
+      const matchesSearch = 
         p.name.toLowerCase().includes(q) ||
         p.contact.toLowerCase().includes(q) ||
-        p.expectedItems.toLowerCase().includes(q)
-      );
+        p.expectedItems.toLowerCase().includes(q);
+      
+      const status = preClaimantStatusMap.get(p.id);
+      const matchesStatus = 
+        filterPreClaimantStatus === 'all' ||
+        filterPreClaimantStatus === status;
+      
+      return matchesSearch && matchesStatus;
     });
-  }, [activityPreClaimants, preClaimantSearchQuery]);
+  }, [activityPreClaimants, preClaimantSearchQuery, preClaimantStatusMap, filterPreClaimantStatus]);
 
   const pendingTodoCount = activityTodos.filter((t) => !t.completed).length;
 
@@ -955,6 +985,19 @@ export const ActivityDetail: React.FC = () => {
                       className="w-full pl-11 pr-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all"
                     />
                   </div>
+                  <div className="relative">
+                    <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <select
+                      value={filterPreClaimantStatus}
+                      onChange={(e) => setFilterPreClaimantStatus(e.target.value)}
+                      className="pl-11 pr-10 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all appearance-none"
+                    >
+                      <option value="all">全部状态</option>
+                      <option value="not-claimed">未领取</option>
+                      <option value="partial-claimed">部分领取</option>
+                      <option value="fully-claimed">已领取</option>
+                    </select>
+                  </div>
                   <button
                     onClick={() => {
                       setEditingPreClaimant(null);
@@ -964,6 +1007,53 @@ export const ActivityDetail: React.FC = () => {
                   >
                     <Plus size={18} />
                     添加预登记
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <button
+                    onClick={() => setFilterPreClaimantStatus('all')}
+                    className={cn(
+                      'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                      filterPreClaimantStatus === 'all'
+                        ? 'bg-pink-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    全部 ({activityPreClaimants.length})
+                  </button>
+                  <button
+                    onClick={() => setFilterPreClaimantStatus('not-claimed')}
+                    className={cn(
+                      'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                      filterPreClaimantStatus === 'not-claimed'
+                        ? 'bg-gray-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    未领取 ({activityPreClaimants.filter((p) => preClaimantStatusMap.get(p.id) === 'not-claimed').length})
+                  </button>
+                  <button
+                    onClick={() => setFilterPreClaimantStatus('partial-claimed')}
+                    className={cn(
+                      'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                      filterPreClaimantStatus === 'partial-claimed'
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    部分领取 ({activityPreClaimants.filter((p) => preClaimantStatusMap.get(p.id) === 'partial-claimed').length})
+                  </button>
+                  <button
+                    onClick={() => setFilterPreClaimantStatus('fully-claimed')}
+                    className={cn(
+                      'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                      filterPreClaimantStatus === 'fully-claimed'
+                        ? 'bg-green-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    已领取 ({activityPreClaimants.filter((p) => preClaimantStatusMap.get(p.id) === 'fully-claimed').length})
                   </button>
                 </div>
 
@@ -978,7 +1068,7 @@ export const ActivityDetail: React.FC = () => {
                     <p className="text-gray-500 mb-4">
                       {activityPreClaimants.length === 0
                         ? '在活动开始前录入可能来领取的人，领取登记时将自动匹配'
-                        : '试试其他搜索条件'}
+                        : '试试其他搜索条件或筛选状态'}
                     </p>
                   </div>
                 ) : (
@@ -992,6 +1082,7 @@ export const ActivityDetail: React.FC = () => {
                           preClaimant={preClaimant}
                           onEdit={() => handleEditPreClaimant(preClaimant)}
                           onDelete={() => handleDeletePreClaimant(preClaimant.id)}
+                          claimStatus={preClaimantStatusMap.get(preClaimant.id)}
                         />
                       </div>
                     ))}
