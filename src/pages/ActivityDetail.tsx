@@ -23,6 +23,8 @@ import {
   BookTemplate,
   Copy,
   Zap,
+  AlertTriangle,
+  ArrowDownUp,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { StatsCard } from '@/components/StatsCard';
@@ -106,6 +108,9 @@ export const ActivityDetail: React.FC = () => {
   const [filterTodoStatus, setFilterTodoStatus] = useState<string>('all');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [lowStockThreshold, setLowStockThreshold] = useState(5);
+  const [showOnlyLowStock, setShowOnlyLowStock] = useState(false);
+  const [sortLowStockFirst, setSortLowStockFirst] = useState(false);
 
   const activity = activities.find((a) => a.id === id);
   const activityItems = useMemo(
@@ -137,15 +142,37 @@ export const ActivityDetail: React.FC = () => {
   const consumptionData = id ? getItemConsumptionData(id) : [];
   const typeDistributionData = id ? getTypeDistributionData(id) : [];
 
+  const lowStockItemsCount = useMemo(
+    () => activityItems.filter((i) => i.currentStock <= lowStockThreshold).length,
+    [activityItems, lowStockThreshold]
+  );
+
   const filteredItems = useMemo(() => {
-    return activityItems.filter((item) => {
+    let result = activityItems.filter((item) => {
       const matchesSearch =
         item.name.toLowerCase().includes(itemSearchQuery.toLowerCase()) ||
         item.supplier.toLowerCase().includes(itemSearchQuery.toLowerCase());
       const matchesType = filterItemType === 'all' || item.type === filterItemType;
-      return matchesSearch && matchesType;
+      const matchesLowStock = !showOnlyLowStock || item.currentStock <= lowStockThreshold;
+      return matchesSearch && matchesType && matchesLowStock;
     });
-  }, [activityItems, itemSearchQuery, filterItemType]);
+
+    if (sortLowStockFirst) {
+      result = [...result].sort((a, b) => {
+        const aIsLow = a.currentStock <= lowStockThreshold ? 1 : 0;
+        const bIsLow = b.currentStock <= lowStockThreshold ? 1 : 0;
+        if (aIsLow !== bIsLow) {
+          return bIsLow - aIsLow;
+        }
+        if (aIsLow && bIsLow) {
+          return a.currentStock - b.currentStock;
+        }
+        return 0;
+      });
+    }
+
+    return result;
+  }, [activityItems, itemSearchQuery, filterItemType, showOnlyLowStock, sortLowStockFirst, lowStockThreshold]);
 
   const filteredRecords = useMemo(() => {
     return activityRecords.filter((record) => {
@@ -536,7 +563,21 @@ export const ActivityDetail: React.FC = () => {
           <div className="p-6">
             {activeTab === 'items' && (
               <div>
-                <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                {lowStockItemsCount > 0 && (
+                  <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                        <AlertTriangle className="text-orange-500" size={20} />
+                      </div>
+                      <div>
+                        <p className="font-medium text-orange-800">库存预警</p>
+                        <p className="text-sm text-orange-600">当前有 <span className="font-bold">{lowStockItemsCount}</span> 种物资库存 ≤ {lowStockThreshold} 个</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row gap-4 mb-4">
                   <div className="relative flex-1">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     <input
@@ -589,6 +630,44 @@ export const ActivityDetail: React.FC = () => {
                       存为模板
                     </button>
                   )}
+                </div>
+
+                <div className="flex flex-wrap gap-3 mb-6">
+                  <button
+                    onClick={() => setShowOnlyLowStock(!showOnlyLowStock)}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all',
+                      showOnlyLowStock
+                        ? 'bg-orange-500 text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    <AlertTriangle size={16} />
+                    只看低库存
+                  </button>
+                  <button
+                    onClick={() => setSortLowStockFirst(!sortLowStockFirst)}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all',
+                      sortLowStockFirst
+                        ? 'bg-orange-500 text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    <ArrowDownUp size={16} />
+                    低库存优先
+                  </button>
+                  <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg">
+                    <span className="text-gray-500 text-sm">低库存阈值:</span>
+                    <input
+                      type="number"
+                      min="1"
+                      value={lowStockThreshold}
+                      onChange={(e) => setLowStockThreshold(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-16 px-2 py-1 bg-white border border-gray-200 rounded text-center text-sm focus:border-pink-400 focus:ring-1 focus:ring-pink-50 outline-none"
+                    />
+                    <span className="text-gray-500 text-sm">个</span>
+                  </div>
                 </div>
 
                 {filteredItems.length === 0 ? (
