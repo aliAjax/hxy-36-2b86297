@@ -142,11 +142,6 @@ export const ActivityDetail: React.FC = () => {
   const consumptionData = id ? getItemConsumptionData(id) : [];
   const typeDistributionData = id ? getTypeDistributionData(id) : [];
 
-  const lowStockItemsCount = useMemo(
-    () => activityItems.filter((i) => i.currentStock <= lowStockThreshold).length,
-    [activityItems, lowStockThreshold]
-  );
-
   const filteredItems = useMemo(() => {
     let result = activityItems.filter((item) => {
       const matchesSearch =
@@ -173,6 +168,11 @@ export const ActivityDetail: React.FC = () => {
 
     return result;
   }, [activityItems, itemSearchQuery, filterItemType, showOnlyLowStock, sortLowStockFirst, lowStockThreshold]);
+
+  const filteredLowStockItemsCount = useMemo(
+    () => filteredItems.filter((i) => i.currentStock <= lowStockThreshold).length,
+    [filteredItems, lowStockThreshold]
+  );
 
   const filteredRecords = useMemo(() => {
     return activityRecords.filter((record) => {
@@ -563,7 +563,7 @@ export const ActivityDetail: React.FC = () => {
           <div className="p-6">
             {activeTab === 'items' && (
               <div>
-                {lowStockItemsCount > 0 && (
+                {filteredLowStockItemsCount > 0 && (
                   <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-xl flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
@@ -571,7 +571,7 @@ export const ActivityDetail: React.FC = () => {
                       </div>
                       <div>
                         <p className="font-medium text-orange-800">库存预警</p>
-                        <p className="text-sm text-orange-600">当前有 <span className="font-bold">{lowStockItemsCount}</span> 种物资库存 ≤ {lowStockThreshold} 个</p>
+                        <p className="text-sm text-orange-600">当前筛选结果中有 <span className="font-bold">{filteredLowStockItemsCount}</span> 种物资库存 ≤ {lowStockThreshold} 个</p>
                       </div>
                     </div>
                   </div>
@@ -662,8 +662,20 @@ export const ActivityDetail: React.FC = () => {
                     <input
                       type="number"
                       min="1"
+                      max="999"
                       value={lowStockThreshold}
-                      onChange={(e) => setLowStockThreshold(Math.max(1, parseInt(e.target.value) || 1))}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        if (!isNaN(val)) {
+                          setLowStockThreshold(Math.min(999, Math.max(1, val)));
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const val = parseInt(e.target.value);
+                        if (isNaN(val) || val < 1) {
+                          setLowStockThreshold(1);
+                        }
+                      }}
                       className="w-16 px-2 py-1 bg-white border border-gray-200 rounded text-center text-sm focus:border-pink-400 focus:ring-1 focus:ring-pink-50 outline-none"
                     />
                     <span className="text-gray-500 text-sm">个</span>
