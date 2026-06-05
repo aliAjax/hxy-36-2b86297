@@ -148,14 +148,14 @@ export const ActivityDetail: React.FC = () => {
         item.name.toLowerCase().includes(itemSearchQuery.toLowerCase()) ||
         item.supplier.toLowerCase().includes(itemSearchQuery.toLowerCase());
       const matchesType = filterItemType === 'all' || item.type === filterItemType;
-      const matchesLowStock = !showOnlyLowStock || item.currentStock <= lowStockThreshold;
+      const matchesLowStock = !showOnlyLowStock || item.currentStock < lowStockThreshold;
       return matchesSearch && matchesType && matchesLowStock;
     });
 
     if (sortLowStockFirst) {
       result = [...result].sort((a, b) => {
-        const aIsLow = a.currentStock <= lowStockThreshold ? 1 : 0;
-        const bIsLow = b.currentStock <= lowStockThreshold ? 1 : 0;
+        const aIsLow = a.currentStock < lowStockThreshold ? 1 : 0;
+        const bIsLow = b.currentStock < lowStockThreshold ? 1 : 0;
         if (aIsLow !== bIsLow) {
           return bIsLow - aIsLow;
         }
@@ -170,7 +170,7 @@ export const ActivityDetail: React.FC = () => {
   }, [activityItems, itemSearchQuery, filterItemType, showOnlyLowStock, sortLowStockFirst, lowStockThreshold]);
 
   const filteredLowStockItemsCount = useMemo(
-    () => filteredItems.filter((i) => i.currentStock <= lowStockThreshold).length,
+    () => filteredItems.filter((i) => i.currentStock < lowStockThreshold).length,
     [filteredItems, lowStockThreshold]
   );
 
@@ -571,7 +571,7 @@ export const ActivityDetail: React.FC = () => {
                       </div>
                       <div>
                         <p className="font-medium text-orange-800">库存预警</p>
-                        <p className="text-sm text-orange-600">当前筛选结果中有 <span className="font-bold">{filteredLowStockItemsCount}</span> 种物资库存 ≤ {lowStockThreshold} 个</p>
+                        <p className="text-sm text-orange-600">当前筛选结果中有 <span className="font-bold">{filteredLowStockItemsCount}</span> 种物资库存低于 {lowStockThreshold} 个</p>
                       </div>
                     </div>
                   </div>
