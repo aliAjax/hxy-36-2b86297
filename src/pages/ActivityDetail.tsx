@@ -26,7 +26,6 @@ import {
   ArrowDownUp,
   Star,
   Check,
-  PieChart,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { StatsCard } from '@/components/StatsCard';
