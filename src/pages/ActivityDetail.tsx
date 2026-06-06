@@ -1,67 +1,51 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft,
-  Plus,
-  Package,
-  Users,
-  DollarSign,
-  Gift,
-  BarChart3,
   ListTodo,
-  Trash2,
-  Search,
-  Filter,
   ShoppingCart,
-  Clock,
-  ClipboardList,
   UserCheck,
-  Monitor,
-  Upload,
-  FileText,
-  BookTemplate,
-  Copy,
-  Zap,
-  AlertTriangle,
-  ArrowDownUp,
-  Star,
-  Check,
+  Users,
+  ClipboardList,
+  BarChart3,
+  Trash2,
+  Gift,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import { StatsCard } from '@/components/StatsCard';
-import { ItemCard } from '@/components/ItemCard';
+import { useActivityData } from '@/hooks/useActivityData';
+import { useItemFilters } from '@/hooks/useItemFilters';
+import { usePurchaseFilters } from '@/hooks/usePurchaseFilters';
+import { useTodoFilters } from '@/hooks/useTodoFilters';
+import { usePreClaimantFilters } from '@/hooks/usePreClaimantFilters';
+import { useActivityDetailDialogs } from '@/hooks/useActivityDetailDialogs';
+import { useToast } from '@/hooks/useToast';
+import { ActivityHeader } from '@/components/activity-detail/ActivityHeader';
+import { CountdownBanner } from '@/components/activity-detail/CountdownBanner';
+import { StatsSection } from '@/components/activity-detail/StatsSection';
+import { TabNavigation, TabType } from '@/components/activity-detail/TabNavigation';
+import { ItemsTab } from '@/components/activity-detail/ItemsTab';
+import { RecordsTab } from '@/components/activity-detail/RecordsTab';
+import { ChartsTab } from '@/components/activity-detail/ChartsTab';
+import { PurchaseTab } from '@/components/activity-detail/PurchaseTab';
+import { TodosTab } from '@/components/activity-detail/TodosTab';
+import { PreRegisterTab } from '@/components/activity-detail/PreRegisterTab';
+import { ReportConfigModal } from '@/components/activity-detail/ReportConfigModal';
 import { ItemForm } from '@/components/ItemForm';
 import { ClaimForm } from '@/components/ClaimForm';
-import { ClaimRecordItem } from '@/components/ClaimRecordItem';
-import { ConsumptionChart } from '@/components/ConsumptionChart';
-import { TypeDistributionChart } from '@/components/TypeDistributionChart';
 import { PurchaseItemForm } from '@/components/PurchaseItemForm';
-import { PurchaseItemCard } from '@/components/PurchaseItemCard';
 import { PurchaseConvertDialog } from '@/components/PurchaseConvertDialog';
-import { TodoItem } from '@/components/TodoItem';
 import { TodoForm } from '@/components/TodoForm';
-import { PreClaimantItem, ClaimStatus } from '@/components/PreClaimantItem';
 import { PreClaimantForm } from '@/components/PreClaimantForm';
 import { BatchClaimForm } from '@/components/BatchClaimForm';
 import { SaveAsTemplateDialog } from '@/components/SaveAsTemplateDialog';
 import { ApplyTemplateDialog } from '@/components/ApplyTemplateDialog';
 import { Modal } from '@/components/Modal';
-import { formatDate, cn, getExpectedItemCount } from '@/utils/helpers';
-import { Item, PurchaseItem, Todo, PreClaimant, ACTIVITY_STATUS_CONFIG } from '@/types';
-
-type TabType = 'items' | 'records' | 'charts' | 'purchase' | 'todos' | 'preregister';
+import { Item, PurchaseItem, Todo, PreClaimant } from '@/types';
 
 export const ActivityDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const {
-    activities,
-    items,
-    records,
-    purchaseItems,
-    todos,
-    preClaimants,
-    keyItemIds,
     addItem,
     updateItem,
     deleteItem,
@@ -78,58 +62,52 @@ export const ActivityDetail: React.FC = () => {
     updatePreClaimant,
     deletePreClaimant,
     toggleKeyItem,
-    getActivityStats,
-    getItemConsumptionData,
-    getTypeDistributionData,
+    purchaseItems,
   } = useAppStore();
 
-  const [activeTab, setActiveTab] = useState<TabType>('items');
-  const [isItemFormOpen, setIsItemFormOpen] = useState(false);
-  const [isClaimFormOpen, setIsClaimFormOpen] = useState(false);
-  const [isPurchaseFormOpen, setIsPurchaseFormOpen] = useState(false);
-  const [isTodoFormOpen, setIsTodoFormOpen] = useState(false);
-  const [isPreClaimantFormOpen, setIsPreClaimantFormOpen] = useState(false);
-  const [isBatchClaimFormOpen, setIsBatchClaimFormOpen] = useState(false);
-  const [isSaveAsTemplateOpen, setIsSaveAsTemplateOpen] = useState(false);
-  const [isApplyTemplateOpen, setIsApplyTemplateOpen] = useState(false);
-  const [isReportConfigOpen, setIsReportConfigOpen] = useState(false);
-  const [selectedReportModules, setSelectedReportModules] = useState<string[]>([
-    'consumption',
-    'budget',
-    'claimers',
-    'duplicates',
-    'purchase',
-    'todos',
-    'lowStock',
-  ]);
-  const [reportLowStockThreshold, setReportLowStockThreshold] = useState(5);
-  const [editingItem, setEditingItem] = useState<Item | null>(null);
-  const [editingPurchaseItem, setEditingPurchaseItem] = useState<PurchaseItem | null>(null);
-  const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
-  const [editingPreClaimant, setEditingPreClaimant] = useState<PreClaimant | null>(null);
-  const [deleteItemConfirm, setDeleteItemConfirm] = useState<string | null>(null);
-  const [deleteRecordConfirm, setDeleteRecordConfirm] = useState<string | null>(null);
-  const [deletePurchaseConfirm, setDeletePurchaseConfirm] = useState<string | null>(null);
-  const [deleteTodoConfirm, setDeleteTodoConfirm] = useState<string | null>(null);
-  const [deletePreClaimantConfirm, setDeletePreClaimantConfirm] = useState<string | null>(null);
-  const [convertPurchaseItem, setConvertPurchaseItem] = useState<PurchaseItem | null>(null);
-  const [itemSearchQuery, setItemSearchQuery] = useState('');
+  const {
+    activity,
+    activityItems,
+    activityRecords,
+    activityPurchaseItems,
+    activityTodos,
+    activityPreClaimants,
+    keyItemIds,
+    stats,
+    consumptionData,
+    typeDistributionData,
+    pendingTodoCount,
+  } = useActivityData(id);
+
+  const itemFilters = useItemFilters({
+    activityItems,
+    keyItemIds,
+  });
+
   const [recordSearchQuery, setRecordSearchQuery] = useState('');
-  const [purchaseSearchQuery, setPurchaseSearchQuery] = useState('');
-  const [todoSearchQuery, setTodoSearchQuery] = useState('');
-  const [preClaimantSearchQuery, setPreClaimantSearchQuery] = useState('');
-  const [filterItemType, setFilterItemType] = useState<string>('all');
-  const [filterPurchaseStatus, setFilterPurchaseStatus] = useState<string>('all');
-  const [filterTodoStatus, setFilterTodoStatus] = useState<string>('all');
-  const [filterPreClaimantStatus, setFilterPreClaimantStatus] = useState<string>('all');
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [lowStockThreshold, setLowStockThreshold] = useState(5);
-  const [showOnlyLowStock, setShowOnlyLowStock] = useState(false);
-  const [sortLowStockFirst, setSortLowStockFirst] = useState(false);
-  const [showOnlyKeyItems, setShowOnlyKeyItems] = useState(false);
-  const [todoViewMode, setTodoViewMode] = useState<'list' | 'countdown'>('list');
-  const [searchParams, setSearchParams] = useSearchParams();
+
+  const purchaseFilters = usePurchaseFilters(activityPurchaseItems);
+
+  const todoFilters = useTodoFilters({
+    activityTodos,
+    activity,
+  });
+
+  const preClaimantFilters = usePreClaimantFilters({
+    activityPreClaimants,
+    activityRecords,
+  });
+
+  const dialogs = useActivityDetailDialogs();
+  const {
+    setSelectedReportModules,
+    setReportLowStockThreshold,
+    setIsReportConfigOpen,
+  } = dialogs;
+
+  const { showSuccessToast, toastMessage, showToast } = useToast();
+
+  const [activeTab, setActiveTab] = useState<TabType>('items');
 
   useEffect(() => {
     if (searchParams.get('openReportConfig') === 'true') {
@@ -150,70 +128,13 @@ export const ActivityDetail: React.FC = () => {
       searchParams.delete('threshold');
       setSearchParams(searchParams, { replace: true });
     }
-  }, [searchParams, setSearchParams]);
-
-  const activity = activities.find((a) => a.id === id);
-  const activityItems = useMemo(
-    () => items.filter((i) => i.activityId === id),
-    [items, id]
-  );
-  const activityRecords = useMemo(
-    () => records.filter((r) => r.activityId === id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [records, id]
-  );
-  const activityPurchaseItems = useMemo(
-    () => purchaseItems.filter((p) => p.activityId === id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [purchaseItems, id]
-  );
-  const activityTodos = useMemo(
-    () => todos.filter((t) => t.activityId === id).sort((a, b) => {
-      if (a.completed !== b.completed) {
-        return a.completed ? 1 : -1;
-      }
-      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-    }),
-    [todos, id]
-  );
-  const activityPreClaimants = useMemo(
-    () => preClaimants.filter((p) => p.activityId === id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [preClaimants, id]
-  );
-  const stats = id ? getActivityStats(id) : null;
-  const consumptionData = id ? getItemConsumptionData(id) : [];
-  const typeDistributionData = id ? getTypeDistributionData(id) : [];
-
-  const filteredItems = useMemo(() => {
-    let result = activityItems.filter((item) => {
-      const matchesSearch =
-        item.name.toLowerCase().includes(itemSearchQuery.toLowerCase()) ||
-        item.supplier.toLowerCase().includes(itemSearchQuery.toLowerCase());
-      const matchesType = filterItemType === 'all' || item.type === filterItemType;
-      const matchesLowStock = !showOnlyLowStock || item.currentStock < lowStockThreshold;
-      const matchesKeyItem = !showOnlyKeyItems || keyItemIds.includes(item.id);
-      return matchesSearch && matchesType && matchesLowStock && matchesKeyItem;
-    });
-
-    if (sortLowStockFirst) {
-      result = [...result].sort((a, b) => {
-        const aIsLow = a.currentStock < lowStockThreshold ? 1 : 0;
-        const bIsLow = b.currentStock < lowStockThreshold ? 1 : 0;
-        if (aIsLow !== bIsLow) {
-          return bIsLow - aIsLow;
-        }
-        if (aIsLow && bIsLow) {
-          return a.currentStock - b.currentStock;
-        }
-        return 0;
-      });
-    }
-
-    return result;
-  }, [activityItems, itemSearchQuery, filterItemType, showOnlyLowStock, sortLowStockFirst, lowStockThreshold, showOnlyKeyItems, keyItemIds]);
-
-  const filteredLowStockItemsCount = useMemo(
-    () => filteredItems.filter((i) => i.currentStock < lowStockThreshold).length,
-    [filteredItems, lowStockThreshold]
-  );
+  }, [
+    searchParams,
+    setSearchParams,
+    setSelectedReportModules,
+    setReportLowStockThreshold,
+    setIsReportConfigOpen,
+  ]);
 
   const filteredRecords = useMemo(() => {
     return activityRecords.filter((record) => {
@@ -225,165 +146,157 @@ export const ActivityDetail: React.FC = () => {
     });
   }, [activityRecords, activityItems, recordSearchQuery]);
 
-  const filteredPurchaseItems = useMemo(() => {
-    return activityPurchaseItems.filter((item) => {
-      const matchesSearch =
-        item.name.toLowerCase().includes(purchaseSearchQuery.toLowerCase()) ||
-        item.supplier.toLowerCase().includes(purchaseSearchQuery.toLowerCase());
-      const matchesStatus = filterPurchaseStatus === 'all' || item.status === filterPurchaseStatus;
-      return matchesSearch && matchesStatus;
-    });
-  }, [activityPurchaseItems, purchaseSearchQuery, filterPurchaseStatus]);
-
-  const filteredTodos = useMemo(() => {
-    return activityTodos.filter((todo) => {
-      const matchesSearch = todo.title.toLowerCase().includes(todoSearchQuery.toLowerCase());
-      const matchesStatus =
-        filterTodoStatus === 'all' ||
-        (filterTodoStatus === 'pending' && !todo.completed) ||
-        (filterTodoStatus === 'completed' && todo.completed) ||
-        (filterTodoStatus === 'overdue' && !todo.completed && new Date(todo.dueDate) < new Date(new Date().toDateString()));
-      return matchesSearch && matchesStatus;
-    });
-  }, [activityTodos, todoSearchQuery, filterTodoStatus]);
-
-  const groupedTodos = useMemo(() => {
-    const getTodoCountdownGroup = (todo: Todo): string => {
-      if (!activity) return 'other';
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const dueDate = new Date(todo.dueDate);
-      dueDate.setHours(0, 0, 0, 0);
-
-      const actDate = new Date(activity.date);
-      actDate.setHours(0, 0, 0, 0);
-
-      if (!todo.completed && dueDate < today) {
-        return 'overdue';
-      }
-
-      const diffTime = actDate.getTime() - dueDate.getTime();
-      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-      if (diffDays < 0) {
-        return 'after-activity';
-      } else if (diffDays === 0) {
-        return 'activity-day';
-      } else if (diffDays <= 3) {
-        return 'within-3-days';
-      } else if (diffDays <= 7) {
-        return 'within-7-days';
-      } else {
-        return 'more-than-7-days';
-      }
-    };
-
-    const groups: Record<string, Todo[]> = {
-      'overdue': [],
-      'activity-day': [],
-      'within-3-days': [],
-      'within-7-days': [],
-      'more-than-7-days': [],
-      'after-activity': [],
-    };
-
-    filteredTodos.forEach((todo) => {
-      const group = getTodoCountdownGroup(todo);
-      if (groups[group]) {
-        groups[group].push(todo);
-      }
-    });
-
-    return groups;
-  }, [filteredTodos, activity]);
-
-  const countdownGroupConfig: Record<string, { label: string; color: string; icon: string }> = {
-    'overdue': { label: '已逾期', color: 'red', icon: '⏰' },
-    'activity-day': { label: '活动当天', color: 'pink', icon: '🎉' },
-    'within-3-days': { label: '活动前3天内', color: 'orange', icon: '🔥' },
-    'within-7-days': { label: '活动前7天内', color: 'yellow', icon: '📅' },
-    'more-than-7-days': { label: '7天以上', color: 'green', icon: '🌱' },
-    'after-activity': { label: '活动后', color: 'purple', icon: '📌' },
-  };
-
-  const preClaimantStatusResult = useMemo(() => {
-    const statusMap = new Map<string, ClaimStatus>();
-    const counts = {
-      total: activityPreClaimants.length,
-      'not-claimed': 0,
-      'partial-claimed': 0,
-      'fully-claimed': 0,
-    };
-
-    activityPreClaimants.forEach((preClaimant) => {
-      const claimantRecords = activityRecords.filter(
-        (r) => r.claimerName.trim().toLowerCase() === preClaimant.name.trim().toLowerCase()
-      );
-
-      let status: ClaimStatus = 'not-claimed';
-      if (claimantRecords.length > 0) {
-        const expectedCount = getExpectedItemCount(preClaimant.expectedItems);
-        if (expectedCount > 0) {
-          const claimedCount = new Set(claimantRecords.map((r) => r.itemId)).size;
-          status = claimedCount >= expectedCount ? 'fully-claimed' : 'partial-claimed';
-        } else {
-          status = 'fully-claimed';
-        }
-      }
-
-      statusMap.set(preClaimant.id, status);
-      counts[status]++;
-    });
-
-    return { statusMap, counts };
-  }, [activityPreClaimants, activityRecords]);
-
-  const preClaimantStatusMap = preClaimantStatusResult.statusMap;
-  const preClaimantStatusCounts = preClaimantStatusResult.counts;
-
-  const filteredPreClaimants = useMemo(() => {
-    return activityPreClaimants.filter((p) => {
-      const q = preClaimantSearchQuery.toLowerCase();
-      const matchesSearch = 
-        p.name.toLowerCase().includes(q) ||
-        p.contact.toLowerCase().includes(q) ||
-        p.expectedItems.toLowerCase().includes(q);
-      
-      const status = preClaimantStatusMap.get(p.id);
-      const matchesStatus = 
-        filterPreClaimantStatus === 'all' ||
-        filterPreClaimantStatus === status;
-      
-      return matchesSearch && matchesStatus;
-    });
-  }, [activityPreClaimants, preClaimantSearchQuery, preClaimantStatusMap, filterPreClaimantStatus]);
-
-  const pendingTodoCount = activityTodos.filter((t) => !t.completed).length;
-
-  const getCountdownText = () => {
-    if (!activity) return '';
-    const now = new Date();
-    const activityDate = new Date(activity.date);
-    const diffTime = activityDate.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays < 0) return '活动已结束';
-    if (diffDays === 0) return '今天';
-    if (diffDays === 1) return '明天';
-    if (diffDays <= 7) return `${diffDays} 天后`;
-    return `${diffDays} 天后`;
-  };
-
   const tabs = [
     { id: 'items' as TabType, label: '物资列表', icon: ListTodo, count: activityItems.length },
-    { id: 'purchase' as TabType, label: '采购清单', icon: ShoppingCart, count: activityPurchaseItems.length },
-    { id: 'preregister' as TabType, label: '预登记', icon: UserCheck, count: activityPreClaimants.length },
+    {
+      id: 'purchase' as TabType,
+      label: '采购清单',
+      icon: ShoppingCart,
+      count: activityPurchaseItems.length,
+    },
+    {
+      id: 'preregister' as TabType,
+      label: '预登记',
+      icon: UserCheck,
+      count: activityPreClaimants.length,
+    },
     { id: 'records' as TabType, label: '领取记录', icon: Users, count: activityRecords.length },
     { id: 'todos' as TabType, label: '待办事项', icon: ClipboardList, count: pendingTodoCount },
     { id: 'charts' as TabType, label: '数据图表', icon: BarChart3 },
   ];
+
+  const handleItemSubmit = (data: Omit<Item, 'id' | 'createdAt'>) => {
+    if (dialogs.editingItem) {
+      updateItem(dialogs.editingItem.id, data);
+    } else {
+      addItem(data);
+    }
+    dialogs.setEditingItem(null);
+  };
+
+  const handleEditItem = (item: Item) => {
+    dialogs.setEditingItem(item);
+    dialogs.setIsItemFormOpen(true);
+  };
+
+  const handleDeleteItem = (itemId: string) => {
+    dialogs.setDeleteItemConfirm(itemId);
+  };
+
+  const confirmDeleteItem = () => {
+    if (dialogs.deleteItemConfirm) {
+      deleteItem(dialogs.deleteItemConfirm);
+      dialogs.setDeleteItemConfirm(null);
+    }
+  };
+
+  const confirmDeleteRecord = () => {
+    if (dialogs.deleteRecordConfirm) {
+      deleteRecord(dialogs.deleteRecordConfirm);
+      dialogs.setDeleteRecordConfirm(null);
+    }
+  };
+
+  const handleClaimSuccess = () => {
+    showToast('领取登记成功！', 3000);
+  };
+
+  const handlePurchaseItemSubmit = (data: Omit<PurchaseItem, 'id' | 'createdAt'>) => {
+    if (dialogs.editingPurchaseItem) {
+      updatePurchaseItem(dialogs.editingPurchaseItem.id, data);
+    } else {
+      addPurchaseItem(data);
+    }
+    dialogs.setEditingPurchaseItem(null);
+  };
+
+  const handleEditPurchaseItem = (purchaseItem: PurchaseItem) => {
+    dialogs.setEditingPurchaseItem(purchaseItem);
+    dialogs.setIsPurchaseFormOpen(true);
+  };
+
+  const handleDeletePurchaseItem = (purchaseId: string) => {
+    dialogs.setDeletePurchaseConfirm(purchaseId);
+  };
+
+  const confirmDeletePurchaseItem = () => {
+    if (dialogs.deletePurchaseConfirm) {
+      deletePurchaseItem(dialogs.deletePurchaseConfirm);
+      dialogs.setDeletePurchaseConfirm(null);
+    }
+  };
+
+  const handleConvertPurchaseItem = (purchaseId: string) => {
+    const item = purchaseItems.find((p) => p.id === purchaseId);
+    if (item) {
+      dialogs.setConvertPurchaseItem(item);
+    }
+  };
+
+  const confirmConvertPurchaseItem = (data: {
+    designUrl: string;
+    distributionRule: string;
+    note: string;
+  }) => {
+    if (dialogs.convertPurchaseItem) {
+      const result = convertPurchaseToItem(dialogs.convertPurchaseItem.id, data);
+      if (result.success) {
+        showToast('已成功转为正式物资！已自动跳转至物资列表。', 4000);
+        setActiveTab('items');
+      }
+      dialogs.setConvertPurchaseItem(null);
+    }
+  };
+
+  const handleTodoSubmit = (data: Omit<Todo, 'id' | 'createdAt'>) => {
+    if (dialogs.editingTodo) {
+      updateTodo(dialogs.editingTodo.id, data);
+    } else {
+      addTodo(data);
+    }
+    dialogs.setEditingTodo(null);
+  };
+
+  const handleEditTodo = (todo: Todo) => {
+    dialogs.setEditingTodo(todo);
+    dialogs.setIsTodoFormOpen(true);
+  };
+
+  const handleDeleteTodo = (todoId: string) => {
+    dialogs.setDeleteTodoConfirm(todoId);
+  };
+
+  const confirmDeleteTodo = () => {
+    if (dialogs.deleteTodoConfirm) {
+      deleteTodo(dialogs.deleteTodoConfirm);
+      dialogs.setDeleteTodoConfirm(null);
+    }
+  };
+
+  const handlePreClaimantSubmit = (data: Omit<PreClaimant, 'id' | 'createdAt'>) => {
+    if (dialogs.editingPreClaimant) {
+      updatePreClaimant(dialogs.editingPreClaimant.id, data);
+    } else {
+      addPreClaimant(data);
+    }
+    dialogs.setEditingPreClaimant(null);
+  };
+
+  const handleEditPreClaimant = (preClaimant: PreClaimant) => {
+    dialogs.setEditingPreClaimant(preClaimant);
+    dialogs.setIsPreClaimantFormOpen(true);
+  };
+
+  const handleDeletePreClaimant = (preClaimantId: string) => {
+    dialogs.setDeletePreClaimantConfirm(preClaimantId);
+  };
+
+  const confirmDeletePreClaimant = () => {
+    if (dialogs.deletePreClaimantConfirm) {
+      deletePreClaimant(dialogs.deletePreClaimantConfirm);
+      dialogs.setDeletePreClaimantConfirm(null);
+    }
+  };
 
   if (!activity) {
     return (
@@ -396,7 +309,6 @@ export const ActivityDetail: React.FC = () => {
             to="/"
             className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-xl font-medium hover:from-pink-600 hover:to-purple-600 transition-all"
           >
-            <ArrowLeft size={18} />
             返回活动列表
           </Link>
         </div>
@@ -404,973 +316,215 @@ export const ActivityDetail: React.FC = () => {
     );
   }
 
-  const statusConfig = ACTIVITY_STATUS_CONFIG[activity.status];
-
-  const handleItemSubmit = (data: Omit<Item, 'id' | 'createdAt'>) => {
-    if (editingItem) {
-      updateItem(editingItem.id, data);
-    } else {
-      addItem(data);
-    }
-    setEditingItem(null);
-  };
-
-  const handleEditItem = (item: Item) => {
-    setEditingItem(item);
-    setIsItemFormOpen(true);
-  };
-
-  const handleDeleteItem = (itemId: string) => {
-    setDeleteItemConfirm(itemId);
-  };
-
-  const confirmDeleteItem = () => {
-    if (deleteItemConfirm) {
-      deleteItem(deleteItemConfirm);
-      setDeleteItemConfirm(null);
-    }
-  };
-
-  const confirmDeleteRecord = () => {
-    if (deleteRecordConfirm) {
-      deleteRecord(deleteRecordConfirm);
-      setDeleteRecordConfirm(null);
-    }
-  };
-
-  const handleClaimSuccess = () => {
-    setToastMessage('领取登记成功！');
-    setShowSuccessToast(true);
-    setTimeout(() => setShowSuccessToast(false), 3000);
-  };
-
-  const handlePurchaseItemSubmit = (data: Omit<PurchaseItem, 'id' | 'createdAt'>) => {
-    if (editingPurchaseItem) {
-      updatePurchaseItem(editingPurchaseItem.id, data);
-    } else {
-      addPurchaseItem(data);
-    }
-    setEditingPurchaseItem(null);
-  };
-
-  const handleEditPurchaseItem = (purchaseItem: PurchaseItem) => {
-    setEditingPurchaseItem(purchaseItem);
-    setIsPurchaseFormOpen(true);
-  };
-
-  const handleDeletePurchaseItem = (purchaseId: string) => {
-    setDeletePurchaseConfirm(purchaseId);
-  };
-
-  const confirmDeletePurchaseItem = () => {
-    if (deletePurchaseConfirm) {
-      deletePurchaseItem(deletePurchaseConfirm);
-      setDeletePurchaseConfirm(null);
-    }
-  };
-
-  const handleConvertPurchaseItem = (purchaseId: string) => {
-    const item = purchaseItems.find((p) => p.id === purchaseId);
-    if (item) {
-      setConvertPurchaseItem(item);
-    }
-  };
-
-  const confirmConvertPurchaseItem = (data: { designUrl: string; distributionRule: string; note: string }) => {
-    if (convertPurchaseItem) {
-      const result = convertPurchaseToItem(convertPurchaseItem.id, data);
-      if (result.success) {
-        setToastMessage('已成功转为正式物资！已自动跳转至物资列表。');
-        setShowSuccessToast(true);
-        setTimeout(() => setShowSuccessToast(false), 4000);
-        setActiveTab('items');
-      }
-      setConvertPurchaseItem(null);
-    }
-  };
-
-  const handleTodoSubmit = (data: Omit<Todo, 'id' | 'createdAt'>) => {
-    if (editingTodo) {
-      updateTodo(editingTodo.id, data);
-    } else {
-      addTodo(data);
-    }
-    setEditingTodo(null);
-  };
-
-  const handleEditTodo = (todo: Todo) => {
-    setEditingTodo(todo);
-    setIsTodoFormOpen(true);
-  };
-
-  const handleDeleteTodo = (todoId: string) => {
-    setDeleteTodoConfirm(todoId);
-  };
-
-  const confirmDeleteTodo = () => {
-    if (deleteTodoConfirm) {
-      deleteTodo(deleteTodoConfirm);
-      setDeleteTodoConfirm(null);
-    }
-  };
-
-  const handlePreClaimantSubmit = (data: Omit<PreClaimant, 'id' | 'createdAt'>) => {
-    if (editingPreClaimant) {
-      updatePreClaimant(editingPreClaimant.id, data);
-    } else {
-      addPreClaimant(data);
-    }
-    setEditingPreClaimant(null);
-  };
-
-  const handleEditPreClaimant = (preClaimant: PreClaimant) => {
-    setEditingPreClaimant(preClaimant);
-    setIsPreClaimantFormOpen(true);
-  };
-
-  const handleDeletePreClaimant = (preClaimantId: string) => {
-    setDeletePreClaimantConfirm(preClaimantId);
-  };
-
-  const confirmDeletePreClaimant = () => {
-    if (deletePreClaimantConfirm) {
-      deletePreClaimant(deletePreClaimantConfirm);
-      setDeletePreClaimantConfirm(null);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-purple-50">
-      <div className="relative h-48 overflow-hidden">
-        {activity.coverUrl ? (
-          <img
-            src={activity.coverUrl}
-            alt={activity.name}
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = 'none';
-            }}
-          />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-pink-300 via-purple-300 to-blue-300">
-            <div className="absolute inset-0 opacity-30">
-              <div className="absolute top-8 left-12 w-24 h-24 rounded-full bg-white/30 blur-2xl" />
-              <div className="absolute bottom-4 right-16 w-32 h-32 rounded-full bg-white/20 blur-2xl" />
-            </div>
-          </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-        <div className="absolute top-4 left-4">
-          <button
-            onClick={() => navigate('/')}
-            className="flex items-center gap-2 px-4 py-2 bg-white/90 backdrop-blur-sm rounded-xl text-gray-700 hover:bg-white transition-colors"
-          >
-            <ArrowLeft size={18} />
-            返回
-          </button>
-        </div>
-        <div className="absolute bottom-4 left-6 right-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-bold text-white">{activity.name}</h1>
-                <span
-                  className="px-3 py-1 rounded-full text-xs font-medium text-white"
-                  style={{ backgroundColor: statusConfig.color }}
-                >
-                  {statusConfig.label}
-                </span>
-              </div>
-              <p className="text-white/80">{formatDate(activity.date)}</p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setIsReportConfigOpen(true)}
-                className="flex items-center gap-2 px-6 py-3 bg-white/90 backdrop-blur-sm text-gray-700 rounded-xl font-medium hover:bg-white transition-all shadow-lg"
-              >
-                <FileText size={20} />
-                复盘报告
-              </button>
-              <Link
-                to={`/activity/${id}/kanban`}
-                className="flex items-center gap-2 px-6 py-3 bg-white/90 backdrop-blur-sm text-gray-700 rounded-xl font-medium hover:bg-white transition-all shadow-lg"
-              >
-                <Monitor size={20} />
-                现场看板
-              </Link>
-              <Link
-                to={`/activity/${id}/quick-claim`}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-xl font-medium hover:from-yellow-500 hover:to-orange-600 transition-all shadow-lg shadow-orange-500/30"
-              >
-                <Zap size={20} />
-                快速领取
-              </Link>
-              <button
-                onClick={() => setIsClaimFormOpen(true)}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-xl font-medium hover:from-pink-600 hover:to-purple-600 transition-all shadow-lg shadow-pink-500/30"
-              >
-                <Gift size={20} />
-                登记领取
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ActivityHeader
+        activity={activity}
+        activityId={id!}
+        onReportConfig={() => dialogs.setIsReportConfigOpen(true)}
+        onClaimForm={() => dialogs.setIsClaimFormOpen(true)}
+      />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-10">
-        <div className="bg-gradient-to-r from-pink-500 to-purple-500 rounded-2xl p-6 mb-6 text-white shadow-lg shadow-pink-500/30">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
-                <Clock size={28} />
-              </div>
-              <div>
-                <p className="text-white/80 text-sm mb-1">距离活动开始还有</p>
-                <p className="text-3xl font-bold">{getCountdownText()}</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-white/80 text-sm mb-1">待办事项</p>
-              <p className="text-2xl font-bold">
-                <span className={pendingTodoCount > 0 ? 'text-yellow-300' : ''}>
-                  {pendingTodoCount}
-                </span>
-                <span className="text-white/60 text-lg"> / {activityTodos.length}</span>
-              </p>
-            </div>
-          </div>
-        </div>
+        <CountdownBanner
+          activity={activity}
+          pendingTodoCount={pendingTodoCount}
+          totalTodoCount={activityTodos.length}
+        />
 
-        {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <StatsCard
-              title="物资种类"
-              value={stats.totalItems}
-              icon={Package}
-              color="pink"
-              subtitle="种类型"
-            />
-            <StatsCard
-              title="已发放"
-              value={stats.distributedStock}
-              icon={Gift}
-              color="purple"
-              subtitle={`/ ${stats.totalStock} 总库存`}
-            />
-            <StatsCard
-              title="剩余库存"
-              value={stats.remainingStock}
-              icon={Package}
-              color="green"
-              subtitle={stats.totalStock > 0 ? `${((stats.remainingStock / stats.totalStock) * 100).toFixed(0)}% 剩余` : '无库存'}
-            />
-            <StatsCard
-              title="总预算"
-              value={`¥${stats.totalBudget}`}
-              icon={DollarSign}
-              color="orange"
-              subtitle={`${stats.uniqueClaimers} 人参与`}
-            />
-          </div>
-        )}
+        <StatsSection stats={stats} />
 
         <div className="bg-white rounded-2xl shadow-sm border border-pink-50 mb-6 overflow-hidden">
-          <div className="flex border-b border-pink-50">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    'flex-1 flex items-center justify-center gap-2 px-4 py-4 font-medium transition-all',
-                    isActive
-                      ? 'text-pink-600 border-b-2 border-pink-500 bg-pink-50/50'
-                      : 'text-gray-500 hover:text-pink-500 hover:bg-pink-50/30'
-                  )}
-                >
-                  <Icon size={18} />
-                  <span>{tab.label}</span>
-                  {tab.count !== undefined && (
-                    <span
-                      className={cn(
-                        'px-2 py-0.5 rounded-full text-xs',
-                        isActive ? 'bg-pink-100 text-pink-600' : 'bg-gray-100 text-gray-500'
-                      )}
-                    >
-                      {tab.count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} tabs={tabs} />
 
           <div className="p-6">
             {activeTab === 'items' && (
-              <div>
-                {filteredLowStockItemsCount > 0 && (
-                  <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-xl flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                        <AlertTriangle className="text-orange-500" size={20} />
-                      </div>
-                      <div>
-                        <p className="font-medium text-orange-800">库存预警</p>
-                        <p className="text-sm text-orange-600">当前筛选结果中有 <span className="font-bold">{filteredLowStockItemsCount}</span> 种物资库存低于 {lowStockThreshold} 个</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex flex-col sm:flex-row gap-4 mb-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input
-                      type="text"
-                      placeholder="搜索物资名称或供应商..."
-                      value={itemSearchQuery}
-                      onChange={(e) => setItemSearchQuery(e.target.value)}
-                      className="w-full pl-11 pr-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all"
-                    />
-                  </div>
-                  <div className="relative">
-                    <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <select
-                      value={filterItemType}
-                      onChange={(e) => setFilterItemType(e.target.value)}
-                      className="pl-11 pr-10 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all appearance-none"
-                    >
-                      <option value="all">全部类型</option>
-                      <option value="lightstick">灯牌</option>
-                      <option value="banner">手幅</option>
-                      <option value="sticker">贴纸</option>
-                      <option value="freepack">无料包</option>
-                      <option value="lottery">抽选礼物</option>
-                      <option value="other">其他</option>
-                    </select>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setEditingItem(null);
-                      setIsItemFormOpen(true);
-                    }}
-                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-xl font-medium hover:from-pink-600 hover:to-purple-600 transition-all shadow-sm"
-                  >
-                    <Plus size={18} />
-                    添加物资
-                  </button>
-                  <button
-                    onClick={() => setIsApplyTemplateOpen(true)}
-                    className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-medium hover:from-green-600 hover:to-emerald-600 transition-all shadow-sm"
-                  >
-                    <Copy size={18} />
-                    从模板创建
-                  </button>
-                  {activityItems.length > 0 && (
-                    <button
-                      onClick={() => setIsSaveAsTemplateOpen(true)}
-                      className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-medium hover:from-amber-600 hover:to-orange-600 transition-all shadow-sm"
-                    >
-                      <BookTemplate size={18} />
-                      存为模板
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap gap-3 mb-6">
-                  <button
-                    onClick={() => setShowOnlyKeyItems(!showOnlyKeyItems)}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all',
-                      showOnlyKeyItems
-                        ? 'bg-yellow-500 text-white shadow-sm'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    <Star size={16} fill={showOnlyKeyItems ? 'currentColor' : 'none'} />
-                    只看重点物资
-                    <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-white/20">
-                      {activityItems.filter((i) => keyItemIds.includes(i.id)).length}
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => setShowOnlyLowStock(!showOnlyLowStock)}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all',
-                      showOnlyLowStock
-                        ? 'bg-orange-500 text-white shadow-sm'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    <AlertTriangle size={16} />
-                    只看低库存
-                  </button>
-                  <button
-                    onClick={() => setSortLowStockFirst(!sortLowStockFirst)}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all',
-                      sortLowStockFirst
-                        ? 'bg-orange-500 text-white shadow-sm'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    <ArrowDownUp size={16} />
-                    低库存优先
-                  </button>
-                  <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg">
-                    <span className="text-gray-500 text-sm">低库存阈值:</span>
-                    <input
-                      type="number"
-                      min="1"
-                      max="999"
-                      value={lowStockThreshold}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value);
-                        if (!isNaN(val)) {
-                          setLowStockThreshold(Math.min(999, Math.max(1, val)));
-                        }
-                      }}
-                      onBlur={(e) => {
-                        const val = parseInt(e.target.value);
-                        if (isNaN(val) || val < 1) {
-                          setLowStockThreshold(1);
-                        }
-                      }}
-                      className="w-16 px-2 py-1 bg-white border border-gray-200 rounded text-center text-sm focus:border-pink-400 focus:ring-1 focus:ring-pink-50 outline-none"
-                    />
-                    <span className="text-gray-500 text-sm">个</span>
-                  </div>
-                </div>
-
-                {filteredItems.length === 0 ? (
-                  <div className="text-center py-16">
-                    <div className="w-20 h-20 mx-auto mb-4 bg-pink-50 rounded-full flex items-center justify-center">
-                      <span className="text-3xl">📦</span>
-                    </div>
-                    <h3 className="text-lg font-medium text-gray-800 mb-2">
-                      {activityItems.length === 0 ? '还没有添加任何物资' : '没有找到匹配的物资'}
-                    </h3>
-                    <p className="text-gray-500 mb-4">
-                      {activityItems.length === 0
-                        ? '点击上方按钮添加物资吧'
-                        : '试试其他搜索条件'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredItems.map((item, index) => (
-                      <div
-                        key={item.id}
-                        style={{ animation: `fadeInUp 0.4s ease-out ${index * 0.05}s both` }}
-                      >
-                        <ItemCard
-                          item={item}
-                          onEdit={() => handleEditItem(item)}
-                          onDelete={() => handleDeleteItem(item.id)}
-                          isKeyItem={keyItemIds.includes(item.id)}
-                          onToggleKeyItem={() => toggleKeyItem(item.id)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <ItemsTab
+                filteredItems={itemFilters.filteredItems}
+                activityItems={activityItems}
+                filteredLowStockItemsCount={itemFilters.filteredLowStockItemsCount}
+                keyItemIds={keyItemIds}
+                keyItemCount={itemFilters.keyItemCount}
+                itemSearchQuery={itemFilters.itemSearchQuery}
+                setItemSearchQuery={itemFilters.setItemSearchQuery}
+                filterItemType={itemFilters.filterItemType}
+                setFilterItemType={itemFilters.setFilterItemType}
+                showOnlyKeyItems={itemFilters.showOnlyKeyItems}
+                setShowOnlyKeyItems={itemFilters.setShowOnlyKeyItems}
+                showOnlyLowStock={itemFilters.showOnlyLowStock}
+                setShowOnlyLowStock={itemFilters.setShowOnlyLowStock}
+                sortLowStockFirst={itemFilters.sortLowStockFirst}
+                setSortLowStockFirst={itemFilters.setSortLowStockFirst}
+                lowStockThreshold={itemFilters.lowStockThreshold}
+                setLowStockThreshold={itemFilters.setLowStockThreshold}
+                onAddItem={() => {
+                  dialogs.setEditingItem(null);
+                  dialogs.setIsItemFormOpen(true);
+                }}
+                onEditItem={handleEditItem}
+                onDeleteItem={handleDeleteItem}
+                onToggleKeyItem={toggleKeyItem}
+                onApplyTemplate={() => dialogs.setIsApplyTemplateOpen(true)}
+                onSaveAsTemplate={() => dialogs.setIsSaveAsTemplateOpen(true)}
+              />
             )}
 
             {activeTab === 'records' && (
-              <div>
-                <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input
-                      type="text"
-                      placeholder="搜索领取人姓名或物资名称..."
-                      value={recordSearchQuery}
-                      onChange={(e) => setRecordSearchQuery(e.target.value)}
-                      className="w-full pl-11 pr-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all"
-                    />
-                  </div>
-                  <button
-                    onClick={() => setIsBatchClaimFormOpen(true)}
-                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-xl font-medium hover:from-purple-600 hover:to-blue-600 transition-all shadow-sm"
-                  >
-                    <Upload size={18} />
-                    批量录入
-                  </button>
-                </div>
-
-                {filteredRecords.length === 0 ? (
-                  <div className="text-center py-16">
-                    <div className="w-20 h-20 mx-auto mb-4 bg-purple-50 rounded-full flex items-center justify-center">
-                      <span className="text-3xl">📝</span>
-                    </div>
-                    <h3 className="text-lg font-medium text-gray-800 mb-2">
-                      {activityRecords.length === 0 ? '还没有领取记录' : '没有找到匹配的记录'}
-                    </h3>
-                    <p className="text-gray-500">
-                      {activityRecords.length === 0
-                        ? '点击右上角"登记领取"按钮开始登记'
-                        : '试试其他搜索条件'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-                    {filteredRecords.map((record, index) => {
-                      const item = activityItems.find((i) => i.id === record.itemId);
-                      return (
-                        <div
-                          key={record.id}
-                          style={{ animation: `fadeInUp 0.3s ease-out ${index * 0.03}s both` }}
-                        >
-                          <ClaimRecordItem
-                            record={record}
-                            item={item}
-                            onDelete={() => setDeleteRecordConfirm(record.id)}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <RecordsTab
+                filteredRecords={filteredRecords}
+                activityRecords={activityRecords}
+                activityItems={activityItems}
+                recordSearchQuery={recordSearchQuery}
+                setRecordSearchQuery={setRecordSearchQuery}
+                onBatchClaim={() => dialogs.setIsBatchClaimFormOpen(true)}
+                onDeleteRecord={(recordId) => dialogs.setDeleteRecordConfirm(recordId)}
+              />
             )}
 
             {activeTab === 'charts' && (
-              <div className="space-y-8">
-                <div className="bg-gray-50 rounded-2xl p-6">
-                  <h3 className="text-lg font-bold text-gray-800 mb-4">📈 物资消耗趋势</h3>
-                  <ConsumptionChart data={consumptionData} chartType="bar" />
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-gray-50 rounded-2xl p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4">🥧 物资类型分布</h3>
-                    <TypeDistributionChart data={typeDistributionData} />
-                  </div>
-                  <div className="bg-gray-50 rounded-2xl p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4">📊 领取趋势</h3>
-                    <ConsumptionChart data={consumptionData} chartType="line" />
-                  </div>
-                </div>
-              </div>
+              <ChartsTab
+                consumptionData={consumptionData}
+                typeDistributionData={typeDistributionData}
+              />
             )}
 
             {activeTab === 'todos' && (
-              <div>
-                <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input
-                      type="text"
-                      placeholder="搜索待办事项..."
-                      value={todoSearchQuery}
-                      onChange={(e) => setTodoSearchQuery(e.target.value)}
-                      className="w-full pl-11 pr-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all"
-                    />
-                  </div>
-                  <div className="relative">
-                    <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <select
-                      value={filterTodoStatus}
-                      onChange={(e) => setFilterTodoStatus(e.target.value)}
-                      className="pl-11 pr-10 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all appearance-none"
-                    >
-                      <option value="all">全部状态</option>
-                      <option value="pending">待完成</option>
-                      <option value="completed">已完成</option>
-                      <option value="overdue">已逾期</option>
-                    </select>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setEditingTodo(null);
-                      setIsTodoFormOpen(true);
-                    }}
-                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-xl font-medium hover:from-pink-600 hover:to-purple-600 transition-all shadow-sm"
-                  >
-                    <Plus size={18} />
-                    添加待办
-                  </button>
-                </div>
-
-                <div className="flex gap-2 mb-6">
-                  <button
-                    onClick={() => setTodoViewMode('list')}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all',
-                      todoViewMode === 'list'
-                        ? 'bg-pink-500 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    <ListTodo size={16} />
-                    列表视图
-                  </button>
-                  <button
-                    onClick={() => setTodoViewMode('countdown')}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all',
-                      todoViewMode === 'countdown'
-                        ? 'bg-pink-500 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    <Clock size={16} />
-                    活动倒计时
-                  </button>
-                </div>
-
-                {filteredTodos.length === 0 && (
-                  <div className="text-center py-16">
-                    <div className="w-20 h-20 mx-auto mb-4 bg-pink-50 rounded-full flex items-center justify-center">
-                      <span className="text-3xl">📋</span>
-                    </div>
-                    <h3 className="text-lg font-medium text-gray-800 mb-2">
-                      {activityTodos.length === 0 ? '还没有添加待办事项' : '没有找到匹配的待办事项'}
-                    </h3>
-                    <p className="text-gray-500 mb-4">
-                      {activityTodos.length === 0
-                        ? '点击上方按钮添加待办事项吧'
-                        : '试试其他搜索条件'}
-                    </p>
-                  </div>
-                )}
-
-                {filteredTodos.length > 0 && todoViewMode === 'list' && (
-                  <div className="space-y-3">
-                    {filteredTodos.map((todo, index) => (
-                      <div
-                        key={todo.id}
-                        style={{ animation: `fadeInUp 0.3s ease-out ${index * 0.03}s both` }}
-                      >
-                        <TodoItem
-                          todo={todo}
-                          onToggle={() => toggleTodo(todo.id)}
-                          onDelete={() => handleDeleteTodo(todo.id)}
-                          onEdit={() => handleEditTodo(todo)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {filteredTodos.length > 0 && todoViewMode === 'countdown' && (
-                  <div className="space-y-6">
-                    {Object.keys(countdownGroupConfig).map((groupKey) => {
-                      const groupTodos = groupedTodos[groupKey] || [];
-                      if (groupTodos.length === 0) return null;
-
-                      const groupConfig = countdownGroupConfig[groupKey];
-
-                      return (
-                        <div key={groupKey}>
-                          <div className="flex items-center gap-2 mb-3">
-                            <span className="text-xl">{groupConfig.icon}</span>
-                            <h3 className="font-bold text-gray-800">{groupConfig.label}</h3>
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full">
-                              {groupTodos.length}
-                            </span>
-                          </div>
-                          <div className="space-y-3">
-                            {groupTodos.map((todo, index) => (
-                              <div
-                                key={todo.id}
-                                style={{ animation: `fadeInUp 0.3s ease-out ${index * 0.03}s both` }}
-                              >
-                                <TodoItem
-                                  todo={todo}
-                                  onToggle={() => toggleTodo(todo.id)}
-                                  onDelete={() => handleDeleteTodo(todo.id)}
-                                  onEdit={() => handleEditTodo(todo)}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <TodosTab
+                filteredTodos={todoFilters.filteredTodos}
+                activityTodos={activityTodos}
+                todoSearchQuery={todoFilters.todoSearchQuery}
+                setTodoSearchQuery={todoFilters.setTodoSearchQuery}
+                filterTodoStatus={todoFilters.filterTodoStatus}
+                setFilterTodoStatus={todoFilters.setFilterTodoStatus}
+                todoViewMode={todoFilters.todoViewMode}
+                setTodoViewMode={todoFilters.setTodoViewMode}
+                groupedTodos={todoFilters.groupedTodos}
+                countdownGroupConfig={todoFilters.countdownGroupConfig}
+                onAddTodo={() => {
+                  dialogs.setEditingTodo(null);
+                  dialogs.setIsTodoFormOpen(true);
+                }}
+                onToggleTodo={toggleTodo}
+                onEditTodo={handleEditTodo}
+                onDeleteTodo={handleDeleteTodo}
+              />
             )}
 
             {activeTab === 'purchase' && (
-              <div>
-                <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input
-                      type="text"
-                      placeholder="搜索采购物资名称或供应商..."
-                      value={purchaseSearchQuery}
-                      onChange={(e) => setPurchaseSearchQuery(e.target.value)}
-                      className="w-full pl-11 pr-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all"
-                    />
-                  </div>
-                  <div className="relative">
-                    <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <select
-                      value={filterPurchaseStatus}
-                      onChange={(e) => setFilterPurchaseStatus(e.target.value)}
-                      className="pl-11 pr-10 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all appearance-none"
-                    >
-                      <option value="all">全部状态</option>
-                      <option value="pending">待采购</option>
-                      <option value="ordered">已下单</option>
-                      <option value="shipped">已发货</option>
-                      <option value="completed">已完成</option>
-                      <option value="cancelled">已取消</option>
-                    </select>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setEditingPurchaseItem(null);
-                      setIsPurchaseFormOpen(true);
-                    }}
-                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-xl font-medium hover:from-pink-600 hover:to-purple-600 transition-all shadow-sm"
-                  >
-                    <Plus size={18} />
-                    添加采购计划
-                  </button>
-                </div>
-
-                {filteredPurchaseItems.length === 0 ? (
-                  <div className="text-center py-16">
-                    <div className="w-20 h-20 mx-auto mb-4 bg-pink-50 rounded-full flex items-center justify-center">
-                      <span className="text-3xl">🛒</span>
-                    </div>
-                    <h3 className="text-lg font-medium text-gray-800 mb-2">
-                      {activityPurchaseItems.length === 0 ? '还没有添加采购计划' : '没有找到匹配的采购计划'}
-                    </h3>
-                    <p className="text-gray-500 mb-4">
-                      {activityPurchaseItems.length === 0
-                        ? '点击上方按钮添加采购计划吧'
-                        : '试试其他搜索条件'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredPurchaseItems.map((item, index) => (
-                      <div
-                        key={item.id}
-                        style={{ animation: `fadeInUp 0.4s ease-out ${index * 0.05}s both` }}
-                      >
-                        <PurchaseItemCard
-                          purchaseItem={item}
-                          onEdit={() => handleEditPurchaseItem(item)}
-                          onDelete={() => handleDeletePurchaseItem(item.id)}
-                          onConvert={() => handleConvertPurchaseItem(item.id)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <PurchaseTab
+                filteredPurchaseItems={purchaseFilters.filteredPurchaseItems}
+                activityPurchaseItems={activityPurchaseItems}
+                purchaseSearchQuery={purchaseFilters.purchaseSearchQuery}
+                setPurchaseSearchQuery={purchaseFilters.setPurchaseSearchQuery}
+                filterPurchaseStatus={purchaseFilters.filterPurchaseStatus}
+                setFilterPurchaseStatus={purchaseFilters.setFilterPurchaseStatus}
+                onAddPurchase={() => {
+                  dialogs.setEditingPurchaseItem(null);
+                  dialogs.setIsPurchaseFormOpen(true);
+                }}
+                onEditPurchase={handleEditPurchaseItem}
+                onDeletePurchase={handleDeletePurchaseItem}
+                onConvertPurchase={handleConvertPurchaseItem}
+              />
             )}
 
             {activeTab === 'preregister' && (
-              <div>
-                <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input
-                      type="text"
-                      placeholder="搜索姓名、联系方式或预期物资..."
-                      value={preClaimantSearchQuery}
-                      onChange={(e) => setPreClaimantSearchQuery(e.target.value)}
-                      className="w-full pl-11 pr-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all"
-                    />
-                  </div>
-                  <button
-                    onClick={() => {
-                      setEditingPreClaimant(null);
-                      setIsPreClaimantFormOpen(true);
-                    }}
-                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-xl font-medium hover:from-pink-600 hover:to-purple-600 transition-all shadow-sm"
-                  >
-                    <Plus size={18} />
-                    添加预登记
-                  </button>
-                </div>
-
-                <div className="flex flex-wrap gap-2 mb-6">
-                  <button
-                    onClick={() => setFilterPreClaimantStatus('all')}
-                    className={cn(
-                      'px-4 py-2 rounded-lg text-sm font-medium transition-all',
-                      filterPreClaimantStatus === 'all'
-                        ? 'bg-pink-500 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    全部 ({preClaimantStatusCounts.total})
-                  </button>
-                  <button
-                    onClick={() => setFilterPreClaimantStatus('not-claimed')}
-                    className={cn(
-                      'px-4 py-2 rounded-lg text-sm font-medium transition-all',
-                      filterPreClaimantStatus === 'not-claimed'
-                        ? 'bg-gray-500 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    未领取 ({preClaimantStatusCounts['not-claimed']})
-                  </button>
-                  <button
-                    onClick={() => setFilterPreClaimantStatus('partial-claimed')}
-                    className={cn(
-                      'px-4 py-2 rounded-lg text-sm font-medium transition-all',
-                      filterPreClaimantStatus === 'partial-claimed'
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    部分领取 ({preClaimantStatusCounts['partial-claimed']})
-                  </button>
-                  <button
-                    onClick={() => setFilterPreClaimantStatus('fully-claimed')}
-                    className={cn(
-                      'px-4 py-2 rounded-lg text-sm font-medium transition-all',
-                      filterPreClaimantStatus === 'fully-claimed'
-                        ? 'bg-green-500 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    已领取 ({preClaimantStatusCounts['fully-claimed']})
-                  </button>
-                </div>
-
-                {filteredPreClaimants.length === 0 ? (
-                  <div className="text-center py-16">
-                    <div className="w-20 h-20 mx-auto mb-4 bg-purple-50 rounded-full flex items-center justify-center">
-                      <span className="text-3xl">👤</span>
-                    </div>
-                    <h3 className="text-lg font-medium text-gray-800 mb-2">
-                      {activityPreClaimants.length === 0 ? '还没有添加预登记' : '没有找到匹配的预登记'}
-                    </h3>
-                    <p className="text-gray-500 mb-4">
-                      {activityPreClaimants.length === 0
-                        ? '在活动开始前录入可能来领取的人，领取登记时将自动匹配'
-                        : '试试其他搜索条件或筛选状态'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {filteredPreClaimants.map((preClaimant, index) => (
-                      <div
-                        key={preClaimant.id}
-                        style={{ animation: `fadeInUp 0.3s ease-out ${index * 0.03}s both` }}
-                      >
-                        <PreClaimantItem
-                          preClaimant={preClaimant}
-                          onEdit={() => handleEditPreClaimant(preClaimant)}
-                          onDelete={() => handleDeletePreClaimant(preClaimant.id)}
-                          claimStatus={preClaimantStatusMap.get(preClaimant.id)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <PreRegisterTab
+                filteredPreClaimants={preClaimantFilters.filteredPreClaimants}
+                activityPreClaimants={activityPreClaimants}
+                preClaimantSearchQuery={preClaimantFilters.preClaimantSearchQuery}
+                setPreClaimantSearchQuery={preClaimantFilters.setPreClaimantSearchQuery}
+                filterPreClaimantStatus={preClaimantFilters.filterPreClaimantStatus}
+                setFilterPreClaimantStatus={preClaimantFilters.setFilterPreClaimantStatus}
+                preClaimantStatusMap={preClaimantFilters.preClaimantStatusMap}
+                preClaimantStatusCounts={preClaimantFilters.preClaimantStatusCounts}
+                onAddPreClaimant={() => {
+                  dialogs.setEditingPreClaimant(null);
+                  dialogs.setIsPreClaimantFormOpen(true);
+                }}
+                onEditPreClaimant={handleEditPreClaimant}
+                onDeletePreClaimant={handleDeletePreClaimant}
+              />
             )}
           </div>
         </div>
       </div>
 
       <ItemForm
-        isOpen={isItemFormOpen}
-        onClose={() => {
-          setIsItemFormOpen(false);
-          setEditingItem(null);
-        }}
+        isOpen={dialogs.isItemFormOpen}
+        onClose={dialogs.closeItemForm}
         onSubmit={handleItemSubmit}
         activityId={id!}
-        item={editingItem}
+        item={dialogs.editingItem}
       />
 
       <ClaimForm
-        isOpen={isClaimFormOpen}
-        onClose={() => setIsClaimFormOpen(false)}
+        isOpen={dialogs.isClaimFormOpen}
+        onClose={() => dialogs.setIsClaimFormOpen(false)}
         activityId={id!}
         items={activityItems.filter((i) => i.currentStock > 0)}
         onSuccess={handleClaimSuccess}
       />
 
       <PurchaseItemForm
-        isOpen={isPurchaseFormOpen}
-        onClose={() => {
-          setIsPurchaseFormOpen(false);
-          setEditingPurchaseItem(null);
-        }}
+        isOpen={dialogs.isPurchaseFormOpen}
+        onClose={dialogs.closePurchaseForm}
         onSubmit={handlePurchaseItemSubmit}
         activityId={id!}
-        purchaseItem={editingPurchaseItem}
+        purchaseItem={dialogs.editingPurchaseItem}
       />
 
       <TodoForm
-        isOpen={isTodoFormOpen}
-        onClose={() => {
-          setIsTodoFormOpen(false);
-          setEditingTodo(null);
-        }}
+        isOpen={dialogs.isTodoFormOpen}
+        onClose={dialogs.closeTodoForm}
         onSubmit={handleTodoSubmit}
         activityId={id!}
-        todo={editingTodo}
+        todo={dialogs.editingTodo}
       />
 
       <PreClaimantForm
-        isOpen={isPreClaimantFormOpen}
-        onClose={() => {
-          setIsPreClaimantFormOpen(false);
-          setEditingPreClaimant(null);
-        }}
+        isOpen={dialogs.isPreClaimantFormOpen}
+        onClose={dialogs.closePreClaimantForm}
         onSubmit={handlePreClaimantSubmit}
         activityId={id!}
-        preClaimant={editingPreClaimant}
+        preClaimant={dialogs.editingPreClaimant}
       />
 
       <BatchClaimForm
-        isOpen={isBatchClaimFormOpen}
-        onClose={() => setIsBatchClaimFormOpen(false)}
+        isOpen={dialogs.isBatchClaimFormOpen}
+        onClose={() => dialogs.setIsBatchClaimFormOpen(false)}
         activityId={id!}
         items={activityItems}
         onSuccess={(result) => {
-          setToastMessage(`批量导入完成：成功 ${result.successCount} 条，失败 ${result.failCount} 条`);
-          setShowSuccessToast(true);
-          setTimeout(() => setShowSuccessToast(false), 4000);
+          showToast(`批量导入完成：成功 ${result.successCount} 条，失败 ${result.failCount} 条`, 4000);
         }}
       />
 
       <SaveAsTemplateDialog
-        isOpen={isSaveAsTemplateOpen}
-        onClose={() => setIsSaveAsTemplateOpen(false)}
+        isOpen={dialogs.isSaveAsTemplateOpen}
+        onClose={() => dialogs.setIsSaveAsTemplateOpen(false)}
         activityId={id!}
         items={activityItems}
         onSuccess={() => {
-          setToastMessage('已保存为物资模板！');
-          setShowSuccessToast(true);
-          setTimeout(() => setShowSuccessToast(false), 3000);
+          showToast('已保存为物资模板！', 3000);
         }}
       />
 
-      {isApplyTemplateOpen && (
+      {dialogs.isApplyTemplateOpen && (
         <ApplyTemplateDialog
           isOpen={true}
-          onClose={() => setIsApplyTemplateOpen(false)}
+          onClose={() => dialogs.setIsApplyTemplateOpen(false)}
           preselectedActivityId={id!}
           onSuccess={(count) => {
-            setIsApplyTemplateOpen(false);
-            setToastMessage(`已从模板创建 ${count} 项物资`);
-            setShowSuccessToast(true);
-            setTimeout(() => setShowSuccessToast(false), 3000);
+            dialogs.setIsApplyTemplateOpen(false);
+            showToast(`已从模板创建 ${count} 项物资`, 3000);
           }}
         />
       )}
 
       <Modal
-        isOpen={!!deleteItemConfirm}
-        onClose={() => setDeleteItemConfirm(null)}
+        isOpen={!!dialogs.deleteItemConfirm}
+        onClose={() => dialogs.setDeleteItemConfirm(null)}
         title="确认删除物资"
         size="sm"
       >
@@ -1379,7 +533,7 @@ export const ActivityDetail: React.FC = () => {
         </p>
         <div className="flex gap-3">
           <button
-            onClick={() => setDeleteItemConfirm(null)}
+            onClick={() => dialogs.setDeleteItemConfirm(null)}
             className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
           >
             取消
@@ -1395,17 +549,15 @@ export const ActivityDetail: React.FC = () => {
       </Modal>
 
       <Modal
-        isOpen={!!deleteRecordConfirm}
-        onClose={() => setDeleteRecordConfirm(null)}
+        isOpen={!!dialogs.deleteRecordConfirm}
+        onClose={() => dialogs.setDeleteRecordConfirm(null)}
         title="确认删除领取记录"
         size="sm"
       >
-        <p className="text-gray-600 mb-6">
-          确定要删除这条领取记录吗？删除后库存将自动恢复。
-        </p>
+        <p className="text-gray-600 mb-6">确定要删除这条领取记录吗？删除后库存将自动恢复。</p>
         <div className="flex gap-3">
           <button
-            onClick={() => setDeleteRecordConfirm(null)}
+            onClick={() => dialogs.setDeleteRecordConfirm(null)}
             className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
           >
             取消
@@ -1420,17 +572,15 @@ export const ActivityDetail: React.FC = () => {
       </Modal>
 
       <Modal
-        isOpen={!!deletePurchaseConfirm}
-        onClose={() => setDeletePurchaseConfirm(null)}
+        isOpen={!!dialogs.deletePurchaseConfirm}
+        onClose={() => dialogs.setDeletePurchaseConfirm(null)}
         title="确认删除采购计划"
         size="sm"
       >
-        <p className="text-gray-600 mb-6">
-          确定要删除这个采购计划吗？该操作无法恢复。
-        </p>
+        <p className="text-gray-600 mb-6">确定要删除这个采购计划吗？该操作无法恢复。</p>
         <div className="flex gap-3">
           <button
-            onClick={() => setDeletePurchaseConfirm(null)}
+            onClick={() => dialogs.setDeletePurchaseConfirm(null)}
             className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
           >
             取消
@@ -1446,24 +596,22 @@ export const ActivityDetail: React.FC = () => {
       </Modal>
 
       <PurchaseConvertDialog
-        isOpen={!!convertPurchaseItem}
-        onClose={() => setConvertPurchaseItem(null)}
+        isOpen={!!dialogs.convertPurchaseItem}
+        onClose={() => dialogs.setConvertPurchaseItem(null)}
         onConfirm={confirmConvertPurchaseItem}
-        purchaseItem={convertPurchaseItem}
+        purchaseItem={dialogs.convertPurchaseItem}
       />
 
       <Modal
-        isOpen={!!deleteTodoConfirm}
-        onClose={() => setDeleteTodoConfirm(null)}
+        isOpen={!!dialogs.deleteTodoConfirm}
+        onClose={() => dialogs.setDeleteTodoConfirm(null)}
         title="确认删除待办"
         size="sm"
       >
-        <p className="text-gray-600 mb-6">
-          确定要删除这个待办事项吗？该操作无法恢复。
-        </p>
+        <p className="text-gray-600 mb-6">确定要删除这个待办事项吗？该操作无法恢复。</p>
         <div className="flex gap-3">
           <button
-            onClick={() => setDeleteTodoConfirm(null)}
+            onClick={() => dialogs.setDeleteTodoConfirm(null)}
             className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
           >
             取消
@@ -1479,17 +627,15 @@ export const ActivityDetail: React.FC = () => {
       </Modal>
 
       <Modal
-        isOpen={!!deletePreClaimantConfirm}
-        onClose={() => setDeletePreClaimantConfirm(null)}
+        isOpen={!!dialogs.deletePreClaimantConfirm}
+        onClose={() => dialogs.setDeletePreClaimantConfirm(null)}
         title="确认删除预登记"
         size="sm"
       >
-        <p className="text-gray-600 mb-6">
-          确定要删除这条预登记信息吗？该操作无法恢复。
-        </p>
+        <p className="text-gray-600 mb-6">确定要删除这条预登记信息吗？该操作无法恢复。</p>
         <div className="flex gap-3">
           <button
-            onClick={() => setDeletePreClaimantConfirm(null)}
+            onClick={() => dialogs.setDeletePreClaimantConfirm(null)}
             className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
           >
             取消
@@ -1504,152 +650,14 @@ export const ActivityDetail: React.FC = () => {
         </div>
       </Modal>
 
-      <Modal
-        isOpen={isReportConfigOpen}
-        onClose={() => setIsReportConfigOpen(false)}
-        title="生成复盘报告"
-        size="lg"
-      >
-        <p className="text-gray-500 text-sm mb-6">
-          选择要包含在报告中的模块，然后点击"生成报告"查看完整报告。
-        </p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-          {[
-            { id: 'consumption', label: '物资消耗', icon: BarChart3, desc: '消耗趋势图与类型分布' },
-            { id: 'budget', label: '预算汇总', icon: DollarSign, desc: '各物资预算与发放情况' },
-            { id: 'claimers', label: '领取人数', icon: Users, desc: '领取人统计与明细' },
-            { id: 'duplicates', label: '重复领取提醒', icon: AlertTriangle, desc: '异常重复领取记录' },
-            { id: 'purchase', label: '采购完成情况', icon: ShoppingCart, desc: '采购进度与预算统计' },
-            { id: 'todos', label: '待办完成情况', icon: ClipboardList, desc: '待办事项完成进度' },
-            { id: 'lowStock', label: '低库存物资', icon: Package, desc: '低于阈值的物资清单' },
-          ].map((module) => {
-            const Icon = module.icon;
-            const isSelected = selectedReportModules.includes(module.id);
-            return (
-              <button
-                key={module.id}
-                onClick={() => {
-                  setSelectedReportModules((prev) =>
-                    isSelected
-                      ? prev.filter((m) => m !== module.id)
-                      : [...prev, module.id]
-                  );
-                }}
-                className={cn(
-                  'flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all',
-                  isSelected
-                    ? 'border-pink-400 bg-pink-50/50'
-                    : 'border-gray-100 bg-white hover:border-pink-200 hover:bg-pink-50/30'
-                )}
-              >
-                <div
-                  className={cn(
-                    'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0',
-                    isSelected ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-500'
-                  )}
-                >
-                  <Icon size={20} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-semibold text-gray-800">{module.label}</h4>
-                    {isSelected && (
-                      <Check size={16} className="text-pink-500 flex-shrink-0" />
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-0.5">{module.desc}</p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {selectedReportModules.includes('lowStock') && (
-          <div className="mb-6 p-4 bg-gray-50 rounded-xl">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              低库存阈值
-            </label>
-            <div className="flex items-center gap-3">
-              <input
-                type="range"
-                min="1"
-                max="50"
-                value={reportLowStockThreshold}
-                onChange={(e) => setReportLowStockThreshold(parseInt(e.target.value))}
-                className="flex-1 accent-pink-500"
-              />
-              <span className="w-16 text-center font-bold text-pink-600">
-                {reportLowStockThreshold} 个
-              </span>
-            </div>
-            <p className="text-xs text-gray-500 mt-2">
-              库存低于此数量的物资将被标记为低库存
-            </p>
-          </div>
-        )}
-
-        <div className="flex items-center justify-between text-sm text-gray-500 mb-6">
-          <span>
-            已选择 <span className="font-bold text-pink-600">{selectedReportModules.length}</span> 个模块
-          </span>
-          <div className="flex gap-2">
-            <button
-              onClick={() =>
-                setSelectedReportModules([
-                  'consumption',
-                  'budget',
-                  'claimers',
-                  'duplicates',
-                  'purchase',
-                  'todos',
-                  'lowStock',
-                ])
-              }
-              className="text-pink-600 hover:text-pink-700 font-medium"
-            >
-              全选
-            </button>
-            <span className="text-gray-300">|</span>
-            <button
-              onClick={() => setSelectedReportModules([])}
-              className="text-gray-500 hover:text-gray-700 font-medium"
-            >
-              清空
-            </button>
-          </div>
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            onClick={() => setIsReportConfigOpen(false)}
-            className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
-          >
-            取消
-          </button>
-          <button
-            onClick={() => {
-              if (selectedReportModules.length === 0) return;
-              const params = new URLSearchParams();
-              params.set('modules', selectedReportModules.join(','));
-              if (selectedReportModules.includes('lowStock')) {
-                params.set('threshold', String(reportLowStockThreshold));
-              }
-              navigate(`/activity/${id}/report?${params.toString()}`);
-              setIsReportConfigOpen(false);
-            }}
-            disabled={selectedReportModules.length === 0}
-            className={cn(
-              'flex-1 py-3 rounded-xl font-medium transition-all',
-              selectedReportModules.length > 0
-                ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white hover:from-pink-600 hover:to-purple-600 shadow-sm'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            )}
-          >
-            生成报告
-          </button>
-        </div>
-      </Modal>
+      <ReportConfigModal
+        isOpen={dialogs.isReportConfigOpen}
+        onClose={() => dialogs.setIsReportConfigOpen(false)}
+        selectedModules={dialogs.selectedReportModules}
+        setSelectedModules={dialogs.setSelectedReportModules}
+        lowStockThreshold={dialogs.reportLowStockThreshold}
+        setLowStockThreshold={dialogs.setReportLowStockThreshold}
+      />
 
       {showSuccessToast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
