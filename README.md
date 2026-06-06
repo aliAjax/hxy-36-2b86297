@@ -64,8 +64,14 @@
 
 ### 环境要求
 
-- Node.js >= 16
+- **Node.js >= 20.0.0**（Vitest 4.x 要求，推荐 20 LTS 或 22+）
 - npm >= 7
+
+> 主要依赖版本约束：
+> - Vite 6.x：支持 Node.js 18 / 20 / 22+
+> - Vitest 4.x：要求 Node.js >= 20.0.0、Vite >= 6.0.0
+> - TypeScript 5.8：支持 Node.js 14.17+
+> - tsx 4.x：支持 Node.js 18+（用于执行 `.mts` 验证脚本）
 
 ### 安装依赖
 
