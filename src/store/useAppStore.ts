@@ -621,6 +621,7 @@ export const useAppStore = create<AppState>()(
           todos: state.todos,
           preClaimants: state.preClaimants,
           materialTemplates: state.materialTemplates,
+          keyItemIds: state.keyItemIds,
         };
         return JSON.stringify(exportObj, null, 2);
       },
@@ -658,6 +659,7 @@ export const useAppStore = create<AppState>()(
             todos: Array.isArray(data.todos) ? data.todos : [],
             preClaimants: Array.isArray(data.preClaimants) ? data.preClaimants : [],
             materialTemplates: migratedTemplates,
+            keyItemIds: Array.isArray(data.keyItemIds) ? data.keyItemIds : [],
           });
           return { success: true };
         } catch (e) {
@@ -674,6 +676,7 @@ export const useAppStore = create<AppState>()(
           todos: [],
           preClaimants: [],
           materialTemplates: [],
+          keyItemIds: [],
         });
       },
 

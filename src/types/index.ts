@@ -113,6 +113,7 @@ export interface AppData {
   todos: Todo[];
   preClaimants: PreClaimant[];
   materialTemplates: MaterialTemplate[];
+  keyItemIds: string[];
 }
 
 export interface ActivityStats {
