@@ -194,3 +194,30 @@ export interface FixPreview {
   affectedCount: number;
   changes: string[];
 }
+
+export type ImportMode = 'overwrite' | 'merge';
+
+export interface MergeFieldSummary {
+  kept: number;
+  added: number;
+  renamed: number;
+}
+
+export interface MergeResult {
+  success: boolean;
+  error?: string;
+  summary?: {
+    activities: MergeFieldSummary;
+    items: MergeFieldSummary;
+    records: MergeFieldSummary;
+    purchaseItems: MergeFieldSummary;
+    todos: MergeFieldSummary;
+    preClaimants: MergeFieldSummary;
+    materialTemplates: MergeFieldSummary;
+  };
+  idMapping?: {
+    activities: Map<string, string>;
+    items: Map<string, string>;
+    templates: Map<string, string>;
+  };
+}

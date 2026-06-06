@@ -1,10 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { Download, Upload, Trash2, FileJson, CheckCircle, AlertTriangle, Database, Image } from 'lucide-react';
+import { Download, Upload, Trash2, FileJson, CheckCircle, AlertTriangle, Database, Image, Merge, Copy } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { Modal } from '@/components/Modal';
 import { DataHealthCenter } from '@/components/DataHealthCenter';
 import { downloadFile, readFileAsText, formatFileSize } from '@/utils/helpers';
-import { AppData } from '@/types';
+import { AppData, ImportMode, MergeResult } from '@/types';
 import { Link } from 'react-router-dom';
 
 interface ImportAnalysis {
@@ -50,13 +50,17 @@ export const DataManagement: React.FC = () => {
     materialTemplates,
     exportData,
     importData,
+    mergeData,
     clearAllData,
   } = useAppStore();
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const [showMergeResult, setShowMergeResult] = useState(false);
+  const [mergeResult, setMergeResult] = useState<MergeResult | null>(null);
   const [importPreview, setImportPreview] = useState<AppData | null>(null);
   const [importAnalysis, setImportAnalysis] = useState<ImportAnalysis | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importMode, setImportMode] = useState<ImportMode>('overwrite');
   const [showSuccessToast, setShowSuccessToast] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -146,11 +150,22 @@ export const DataManagement: React.FC = () => {
   const confirmImport = () => {
     if (!importPreview) return;
 
-    const result = importData(importPreview);
-    if (result.success) {
-      showToast('数据导入成功！');
+    if (importMode === 'overwrite') {
+      const result = importData(importPreview);
+      if (result.success) {
+        showToast('数据导入成功！');
+      } else {
+        setImportError(result.error || '导入失败');
+      }
     } else {
-      setImportError(result.error || '导入失败');
+      const result = mergeData(importPreview);
+      if (result.success) {
+        setMergeResult(result);
+        setShowMergeResult(true);
+        showToast('合并导入成功！');
+      } else {
+        setImportError(result.error || '合并失败');
+      }
     }
     setShowImportConfirm(false);
     setImportPreview(null);
@@ -265,7 +280,7 @@ export const DataManagement: React.FC = () => {
             </div>
             <h3 className="text-lg font-bold text-gray-800 mb-2">导入恢复</h3>
             <p className="text-gray-500 text-sm mb-4">
-              从之前导出的 JSON 备份文件恢复数据。此操作将覆盖现有数据。
+              从之前导出的 JSON 备份文件恢复数据。支持覆盖导入和合并导入两种模式。
             </p>
             <button
               onClick={handleImportClick}
@@ -360,17 +375,75 @@ export const DataManagement: React.FC = () => {
       >
         {importAnalysis && importPreview && (
           <>
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="text-amber-500 flex-shrink-0 mt-0.5" size={20} />
-                <div>
-                  <p className="font-medium text-amber-800">当前本地数据将被覆盖</p>
-                  <p className="text-sm text-amber-700">
-                    导入后，当前所有数据将被替换为备份文件中的数据，此操作无法撤销。
+            <div className="mb-6">
+              <h3 className="text-sm font-medium text-gray-500 mb-3">导入模式</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setImportMode('overwrite')}
+                  className={`p-4 rounded-xl border-2 transition-all text-left ${
+                    importMode === 'overwrite'
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Copy size={20} className={importMode === 'overwrite' ? 'text-blue-500' : 'text-gray-400'} />
+                    <span className={`font-semibold ${importMode === 'overwrite' ? 'text-blue-700' : 'text-gray-700'}`}>
+                      覆盖导入
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    用备份数据替换当前所有数据，原有数据将丢失
                   </p>
-                </div>
+                </button>
+                <button
+                  onClick={() => setImportMode('merge')}
+                  className={`p-4 rounded-xl border-2 transition-all text-left ${
+                    importMode === 'merge'
+                      ? 'border-purple-500 bg-purple-50'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Merge size={20} className={importMode === 'merge' ? 'text-purple-500' : 'text-gray-400'} />
+                    <span className={`font-semibold ${importMode === 'merge' ? 'text-purple-700' : 'text-gray-700'}`}>
+                      合并导入
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    将备份数据合并到当前数据中，保留原有数据
+                  </p>
+                </button>
               </div>
             </div>
+
+            {importMode === 'overwrite' && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="text-amber-500 flex-shrink-0 mt-0.5" size={20} />
+                  <div>
+                    <p className="font-medium text-amber-800">当前本地数据将被覆盖</p>
+                    <p className="text-sm text-amber-700">
+                      导入后，当前所有数据将被替换为备份文件中的数据，此操作无法撤销。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {importMode === 'merge' && (
+              <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl mb-4">
+                <div className="flex items-start gap-3">
+                  <Merge className="text-purple-500 flex-shrink-0 mt-0.5" size={20} />
+                  <div>
+                    <p className="font-medium text-purple-800">将保留当前本地数据</p>
+                    <p className="text-sm text-purple-700">
+                      备份中的数据将合并到当前数据中。如遇ID冲突，将自动为导入的数据生成新ID以避免混淆。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {importAnalysis.missingFields.length > 0 && (
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl mb-4">
@@ -400,7 +473,9 @@ export const DataManagement: React.FC = () => {
             )}
 
             <div className="mb-2">
-              <h3 className="text-sm font-medium text-gray-500 mb-3">数据详情对比</h3>
+              <h3 className="text-sm font-medium text-gray-500 mb-3">
+                {importMode === 'overwrite' ? '数据详情对比（导入后将替换当前数据）' : '数据详情对比（合并后将累加数据）'}
+              </h3>
               <div className="space-y-2">
                 {Object.entries(DATA_FIELD_LABELS).map(([field, info]) => {
                   const importCount = importAnalysis.counts[field as keyof typeof importAnalysis.counts];
@@ -475,9 +550,121 @@ export const DataManagement: React.FC = () => {
               </button>
               <button
                 onClick={confirmImport}
-                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-medium hover:from-blue-600 hover:to-indigo-600 transition-all shadow-lg shadow-blue-200"
+                className={`flex-1 py-3 rounded-xl text-white font-medium transition-all shadow-lg ${
+                  importMode === 'overwrite'
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 shadow-blue-200'
+                    : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 shadow-purple-200'
+                }`}
               >
-                确认导入
+                {importMode === 'overwrite' ? '确认覆盖导入' : '确认合并导入'}
+              </button>
+            </div>
+          </>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={showMergeResult}
+        onClose={() => {
+          setShowMergeResult(false);
+          setMergeResult(null);
+        }}
+        title="合并导入结果"
+        size="lg"
+      >
+        {mergeResult?.success && mergeResult.summary && (
+          <>
+            <div className="p-4 bg-green-50 border border-green-200 rounded-xl mb-6">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={20} />
+                <div>
+                  <p className="font-medium text-green-800">合并导入成功</p>
+                  <p className="text-sm text-green-700">
+                    备份数据已成功合并到当前数据中，原有数据均已保留。
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-2">
+              <h3 className="text-sm font-medium text-gray-500 mb-3">合并详情</h3>
+              <div className="space-y-2">
+                {Object.entries(DATA_FIELD_LABELS).map(([field, info]) => {
+                  const summary = mergeResult.summary![field as keyof typeof mergeResult.summary];
+                  if (!summary) return null;
+
+                  return (
+                    <div
+                      key={field}
+                      className="flex items-center justify-between p-3 rounded-xl border bg-white border-gray-100 hover:border-purple-200 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">{info.icon}</span>
+                        <div>
+                          <p className="font-medium text-gray-800">{info.label}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 text-sm">
+                        <div className="text-right">
+                          <p className="text-gray-400 text-xs">原有保留</p>
+                          <p className="font-medium text-gray-500">{summary.kept}</p>
+                        </div>
+                        <div className="text-gray-300">+</div>
+                        <div className="text-right">
+                          <p className="text-gray-400 text-xs">新增</p>
+                          <p className="font-bold text-green-600">{summary.added}</p>
+                        </div>
+                        {summary.renamed > 0 && (
+                          <>
+                            <div className="text-gray-300">=</div>
+                            <div className="text-right">
+                              <p className="text-gray-400 text-xs">ID重命名</p>
+                              <p className="font-medium text-amber-600">{summary.renamed}</p>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl mt-6 mb-6">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="text-purple-500 flex-shrink-0 mt-0.5" size={20} />
+                <div>
+                  <p className="font-medium text-purple-800 mb-1">关于 ID 重命名</p>
+                  <p className="text-sm text-purple-700">
+                    当备份中的数据 ID 与本地数据 ID 冲突时，系统会自动为导入的数据生成新的唯一 ID，
+                    并同步更新所有关联引用（如物资所属活动、领取记录关联的物资等），
+                    确保不同来源的数据不会混淆。
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl mb-6">
+              <div className="flex items-start gap-3">
+                <Database className="text-blue-500 flex-shrink-0 mt-0.5" size={20} />
+                <div>
+                  <p className="font-medium text-blue-800 mb-1">数据健康检查</p>
+                  <p className="text-sm text-blue-700">
+                    建议合并后前往数据健康检查中心扫描，确认是否存在孤儿数据或库存不一致等问题。
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowMergeResult(false);
+                  setMergeResult(null);
+                }}
+                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium hover:from-purple-600 hover:to-pink-600 transition-all shadow-lg shadow-purple-200"
+              >
+                完成
               </button>
             </div>
           </>

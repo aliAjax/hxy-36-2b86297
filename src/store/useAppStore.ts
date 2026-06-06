@@ -18,6 +18,8 @@ import {
   MaterialTemplate,
   MaterialTemplateItem,
   TemplateApplyAdjustments,
+  MergeResult,
+  MergeFieldSummary,
 } from '@/types';
 import { generateId, getDateKey } from '@/utils/helpers';
 
@@ -99,6 +101,7 @@ interface AppState {
 
   exportData: () => string;
   importData: (data: AppData) => { success: boolean; error?: string };
+  mergeData: (data: AppData) => MergeResult;
   clearAllData: () => void;
 
   checkDuplicateClaim: (activityId: string, itemId: string, claimerName: string) => boolean;
@@ -662,6 +665,222 @@ export const useAppStore = create<AppState>()(
             keyItemIds: Array.isArray(data.keyItemIds) ? data.keyItemIds : [],
           });
           return { success: true };
+        } catch (e) {
+          return { success: false, error: e instanceof Error ? e.message : '未知错误' };
+        }
+      },
+
+      mergeData: (data) => {
+        try {
+          const state = get();
+
+          if (
+            !Array.isArray(data.activities) ||
+            !Array.isArray(data.items) ||
+            !Array.isArray(data.records)
+          ) {
+            return { success: false, error: '数据格式不正确' };
+          }
+
+          const localActivityIds = new Set(state.activities.map((a) => a.id));
+          const localItemIds = new Set(state.items.map((i) => i.id));
+          const localTemplateIds = new Set(state.materialTemplates.map((t) => t.id));
+          const localRecordIds = new Set(state.records.map((r) => r.id));
+          const localPurchaseIds = new Set(state.purchaseItems.map((p) => p.id));
+          const localTodoIds = new Set(state.todos.map((t) => t.id));
+          const localPreClaimantIds = new Set(state.preClaimants.map((p) => p.id));
+
+          const activityIdMap = new Map<string, string>();
+          const itemIdMap = new Map<string, string>();
+          const templateIdMap = new Map<string, string>();
+
+          const activitySummary: MergeFieldSummary = { kept: 0, added: 0, renamed: 0 };
+          const itemSummary: MergeFieldSummary = { kept: 0, added: 0, renamed: 0 };
+          const recordSummary: MergeFieldSummary = { kept: 0, added: 0, renamed: 0 };
+          const purchaseSummary: MergeFieldSummary = { kept: 0, added: 0, renamed: 0 };
+          const todoSummary: MergeFieldSummary = { kept: 0, added: 0, renamed: 0 };
+          const preClaimantSummary: MergeFieldSummary = { kept: 0, added: 0, renamed: 0 };
+          const templateSummary: MergeFieldSummary = { kept: 0, added: 0, renamed: 0 };
+
+          activitySummary.kept = state.activities.length;
+          itemSummary.kept = state.items.length;
+          recordSummary.kept = state.records.length;
+          purchaseSummary.kept = state.purchaseItems.length;
+          todoSummary.kept = state.todos.length;
+          preClaimantSummary.kept = state.preClaimants.length;
+          templateSummary.kept = state.materialTemplates.length;
+
+          const mergedActivities: Activity[] = [...state.activities];
+          data.activities.forEach((activity) => {
+            if (!localActivityIds.has(activity.id)) {
+              mergedActivities.push(activity);
+              activityIdMap.set(activity.id, activity.id);
+              activitySummary.added++;
+            } else {
+              const newId = generateId();
+              activityIdMap.set(activity.id, newId);
+              mergedActivities.push({ ...activity, id: newId });
+              activitySummary.renamed++;
+              activitySummary.added++;
+            }
+          });
+
+          const mergedItems: Item[] = [...state.items];
+          data.items.forEach((item) => {
+            const mappedActivityId = activityIdMap.get(item.activityId) || item.activityId;
+            if (!localItemIds.has(item.id)) {
+              const newItem = { ...item, activityId: mappedActivityId };
+              mergedItems.push(newItem);
+              itemIdMap.set(item.id, item.id);
+              itemSummary.added++;
+            } else {
+              const newId = generateId();
+              itemIdMap.set(item.id, newId);
+              mergedItems.push({ ...item, id: newId, activityId: mappedActivityId });
+              itemSummary.renamed++;
+              itemSummary.added++;
+            }
+          });
+
+          const mergedRecords: ClaimRecord[] = [...state.records];
+          data.records.forEach((record) => {
+            const mappedActivityId = activityIdMap.get(record.activityId) || record.activityId;
+            const mappedItemId = itemIdMap.get(record.itemId) || record.itemId;
+
+            if (!localRecordIds.has(record.id)) {
+              mergedRecords.push({
+                ...record,
+                activityId: mappedActivityId,
+                itemId: mappedItemId,
+              });
+              recordSummary.added++;
+            } else {
+              const newId = generateId();
+              mergedRecords.push({
+                ...record,
+                id: newId,
+                activityId: mappedActivityId,
+                itemId: mappedItemId,
+              });
+              recordSummary.renamed++;
+              recordSummary.added++;
+            }
+          });
+
+          const importPurchaseItems = Array.isArray(data.purchaseItems) ? data.purchaseItems : [];
+          const mergedPurchaseItems: PurchaseItem[] = [...state.purchaseItems];
+          importPurchaseItems.forEach((item) => {
+            const mappedActivityId = activityIdMap.get(item.activityId) || item.activityId;
+            if (!localPurchaseIds.has(item.id)) {
+              mergedPurchaseItems.push({ ...item, activityId: mappedActivityId });
+              purchaseSummary.added++;
+            } else {
+              const newId = generateId();
+              mergedPurchaseItems.push({ ...item, id: newId, activityId: mappedActivityId });
+              purchaseSummary.renamed++;
+              purchaseSummary.added++;
+            }
+          });
+
+          const importTodos = Array.isArray(data.todos) ? data.todos : [];
+          const mergedTodos: Todo[] = [...state.todos];
+          importTodos.forEach((todo) => {
+            const mappedActivityId = activityIdMap.get(todo.activityId) || todo.activityId;
+            if (!localTodoIds.has(todo.id)) {
+              mergedTodos.push({ ...todo, activityId: mappedActivityId });
+              todoSummary.added++;
+            } else {
+              const newId = generateId();
+              mergedTodos.push({ ...todo, id: newId, activityId: mappedActivityId });
+              todoSummary.renamed++;
+              todoSummary.added++;
+            }
+          });
+
+          const importPreClaimants = Array.isArray(data.preClaimants) ? data.preClaimants : [];
+          const mergedPreClaimants: PreClaimant[] = [...state.preClaimants];
+          importPreClaimants.forEach((p) => {
+            const mappedActivityId = activityIdMap.get(p.activityId) || p.activityId;
+            if (!localPreClaimantIds.has(p.id)) {
+              mergedPreClaimants.push({ ...p, activityId: mappedActivityId });
+              preClaimantSummary.added++;
+            } else {
+              const newId = generateId();
+              mergedPreClaimants.push({ ...p, id: newId, activityId: mappedActivityId });
+              preClaimantSummary.renamed++;
+              preClaimantSummary.added++;
+            }
+          });
+
+          type TemplateItemWithOptionalId = Omit<MaterialTemplateItem, 'id'> & { id?: string };
+          type TemplateWithOptionalId = Omit<MaterialTemplate, 'items'> & {
+            items: TemplateItemWithOptionalId[];
+          };
+
+          const importTemplates = Array.isArray(data.materialTemplates)
+            ? (data.materialTemplates as TemplateWithOptionalId[])
+            : [];
+          const mergedTemplates: MaterialTemplate[] = [...state.materialTemplates];
+          importTemplates.forEach((template) => {
+            const migratedItems: MaterialTemplateItem[] = template.items.map((item) => ({
+              ...item,
+              id: item.id || generateId(),
+            }));
+
+            if (!localTemplateIds.has(template.id)) {
+              const newTemplate: MaterialTemplate = {
+                ...template,
+                items: migratedItems,
+              } as MaterialTemplate;
+              mergedTemplates.push(newTemplate);
+              templateIdMap.set(template.id, template.id);
+              templateSummary.added++;
+            } else {
+              const newId = generateId();
+              templateIdMap.set(template.id, newId);
+              const newTemplate: MaterialTemplate = {
+                ...template,
+                id: newId,
+                items: migratedItems,
+              } as MaterialTemplate;
+              mergedTemplates.push(newTemplate);
+              templateSummary.renamed++;
+              templateSummary.added++;
+            }
+          });
+
+          const importKeyItemIds = Array.isArray(data.keyItemIds) ? data.keyItemIds : [];
+          const mergedKeyItemIds: string[] = [...state.keyItemIds];
+          importKeyItemIds.forEach((itemId) => {
+            const mappedId = itemIdMap.get(itemId) || itemId;
+            if (!mergedKeyItemIds.includes(mappedId)) {
+              mergedKeyItemIds.push(mappedId);
+            }
+          });
+
+          set({
+            activities: mergedActivities,
+            items: mergedItems,
+            records: mergedRecords,
+            purchaseItems: mergedPurchaseItems,
+            todos: mergedTodos,
+            preClaimants: mergedPreClaimants,
+            materialTemplates: mergedTemplates,
+            keyItemIds: mergedKeyItemIds,
+          });
+
+          return {
+            success: true,
+            summary: {
+              activities: activitySummary,
+              items: itemSummary,
+              records: recordSummary,
+              purchaseItems: purchaseSummary,
+              todos: todoSummary,
+              preClaimants: preClaimantSummary,
+              materialTemplates: templateSummary,
+            },
+          };
         } catch (e) {
           return { success: false, error: e instanceof Error ? e.message : '未知错误' };
         }
