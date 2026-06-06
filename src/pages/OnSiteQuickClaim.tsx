@@ -170,20 +170,10 @@ export const OnSiteQuickClaim: React.FC = () => {
     [multiClaimItems]
   );
 
-  const submittableItems = useMemo(() => {
-    return selectedMultiItems.filter((m) => {
-      const status = getMultiItemStatus(m.itemId);
-      if (!status) return false;
-      if (status.status === 'error') return false;
-      if (status.status === 'warning' && status.isDuplicate && !multiForceSubmit) return false;
-      return true;
-    });
-  }, [selectedMultiItems, getMultiItemStatus, multiForceSubmit]);
-
   const canMultiSubmit = useMemo(() => {
     if (!claimerName.trim()) return false;
-    return submittableItems.length > 0;
-  }, [claimerName, submittableItems]);
+    return selectedMultiItems.length > 0;
+  }, [claimerName, selectedMultiItems]);
 
   const hasMultiErrors = useMemo(() => {
     return selectedMultiItems.some((m) => {
@@ -295,7 +285,7 @@ export const OnSiteQuickClaim: React.FC = () => {
   const handleMultiSubmit = () => {
     if (!canMultiSubmit) return;
 
-    const recordsToAdd = submittableItems.map((m) => ({
+    const recordsToAdd = selectedMultiItems.map((m) => ({
       activityId: id!,
       itemId: m.itemId,
       claimerName: claimerName.trim(),
@@ -306,11 +296,9 @@ export const OnSiteQuickClaim: React.FC = () => {
 
     const result = addRecordsBatch(recordsToAdd, multiForceSubmit);
 
-    const claimResults: MultiClaimResult[] = selectedMultiItems.map((m) => {
+    const claimResults: MultiClaimResult[] = selectedMultiItems.map((m, index) => {
       const item = activityItems.find((i) => i.id === m.itemId)!;
-      const batchResult = result.results.find(
-        (r) => r.record?.itemId === m.itemId && r.record?.claimerName === claimerName.trim()
-      );
+      const batchResult = result.results.find((r) => r.index === index);
 
       if (batchResult) {
         return {
@@ -393,13 +381,7 @@ export const OnSiteQuickClaim: React.FC = () => {
 
   const selectAllItems = () => {
     setMultiClaimItems((prev) =>
-      prev.map((m) => {
-        const item = activityItems.find((i) => i.id === m.itemId);
-        if (item && item.currentStock > 0) {
-          return { ...m, selected: true };
-        }
-        return m;
-      })
+      prev.map((m) => ({ ...m, selected: true }))
     );
   };
 
@@ -686,7 +668,7 @@ export const OnSiteQuickClaim: React.FC = () => {
 
                     <div className="mb-4 flex items-center justify-between">
                       <label className="text-sm font-medium text-gray-400">
-                        选择物资（已选 {selectedMultiItems.length} 项，可提交 {submittableItems.length} 项）
+                        选择物资（已选 {selectedMultiItems.length} 项）
                       </label>
                       <div className="flex gap-2">
                         <button
@@ -717,28 +699,24 @@ export const OnSiteQuickClaim: React.FC = () => {
                           <div
                             key={multiItem.itemId}
                             className={cn(
-                              'p-4 rounded-xl border-2 transition-all',
+                              'p-4 rounded-xl border-2 transition-all cursor-pointer',
                               multiItem.selected
                                 ? status?.status === 'error'
                                   ? 'border-red-500 bg-red-500/10'
                                   : status?.status === 'warning'
                                   ? 'border-orange-500 bg-orange-500/10'
                                   : 'border-pink-500 bg-pink-500/20'
-                                : isOutOfStock
-                                ? 'border-gray-700 bg-gray-800/50 opacity-60'
                                 : 'border-gray-700 bg-gray-800 hover:border-gray-600'
                             )}
+                            onClick={() => handleMultiItemToggle(multiItem.itemId)}
                           >
                             <div className="flex items-center gap-4">
                               <button
                                 onClick={() => handleMultiItemToggle(multiItem.itemId)}
-                                disabled={isOutOfStock}
                                 className={cn(
                                   'w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0',
                                   multiItem.selected
                                     ? 'bg-pink-500 border-pink-500'
-                                    : isOutOfStock
-                                    ? 'border-gray-600 cursor-not-allowed'
                                     : 'border-gray-500 hover:border-gray-400'
                                 )}
                               >
@@ -866,9 +844,9 @@ export const OnSiteQuickClaim: React.FC = () => {
                         <div className="flex items-start gap-2 text-yellow-300 text-sm">
                           <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
                           <div>
-                            <p className="font-medium">部分物资无法提交</p>
+                            <p className="font-medium">存在异常物资</p>
                             <p className="text-yellow-400/70 mt-0.5">
-                              存在库存不足的物资，提交时将跳过这些项，仅发放可提交的物资
+                              部分物资库存不足或存在重复领取，提交后将在结果中显示成功/失败详情
                             </p>
                           </div>
                         </div>
@@ -886,7 +864,7 @@ export const OnSiteQuickClaim: React.FC = () => {
                       )}
                     >
                       <Zap className="inline mr-2" size={22} />
-                      批量登记领取（{submittableItems.length} 项可提交）
+                      批量登记领取（{selectedMultiItems.length} 项）
                     </button>
                   </>
                 )}
