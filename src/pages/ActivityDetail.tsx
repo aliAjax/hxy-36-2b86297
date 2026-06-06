@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Plus,
@@ -130,6 +130,28 @@ export const ActivityDetail: React.FC = () => {
   const [sortLowStockFirst, setSortLowStockFirst] = useState(false);
   const [showOnlyKeyItems, setShowOnlyKeyItems] = useState(false);
   const [todoViewMode, setTodoViewMode] = useState<'list' | 'countdown'>('list');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get('openReportConfig') === 'true') {
+      const modulesParam = searchParams.get('modules');
+      if (modulesParam) {
+        setSelectedReportModules(modulesParam.split(','));
+      }
+      const thresholdParam = searchParams.get('threshold');
+      if (thresholdParam) {
+        const val = parseInt(thresholdParam);
+        if (!isNaN(val) && val > 0) {
+          setReportLowStockThreshold(val);
+        }
+      }
+      setIsReportConfigOpen(true);
+      searchParams.delete('openReportConfig');
+      searchParams.delete('modules');
+      searchParams.delete('threshold');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const activity = activities.find((a) => a.id === id);
   const activityItems = useMemo(

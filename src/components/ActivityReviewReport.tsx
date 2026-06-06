@@ -326,12 +326,14 @@ export const ActivityReviewReport: React.FC = () => {
   }, [navigate, id]);
 
   const handleReconfigure = useCallback(() => {
-    navigate(`/activity/${id}`);
-    setTimeout(() => {
-      const event = new CustomEvent('openReportConfig');
-      window.dispatchEvent(event);
-    }, 100);
-  }, [navigate, id]);
+    const params = new URLSearchParams();
+    params.set('openReportConfig', 'true');
+    params.set('modules', selectedModules.join(','));
+    if (selectedModules.includes('lowStock')) {
+      params.set('threshold', String(lowStockThreshold));
+    }
+    navigate(`/activity/${id}?${params.toString()}`);
+  }, [navigate, id, selectedModules, lowStockThreshold]);
 
   const handleToggleHideContact = useCallback(() => {
     setHideContact((prev) => !prev);
