@@ -28,6 +28,7 @@ interface AppState {
   purchaseItems: PurchaseItem[];
   todos: Todo[];
   preClaimants: PreClaimant[];
+  keyItemIds: string[];
 
   materialTemplates: MaterialTemplate[];
 
@@ -77,6 +78,9 @@ interface AppState {
   updatePreClaimant: (id: string, data: Partial<PreClaimant>) => void;
   deletePreClaimant: (id: string) => void;
   findPreClaimantByName: (activityId: string, name: string) => PreClaimant | undefined;
+
+  toggleKeyItem: (itemId: string) => void;
+  isKeyItem: (itemId: string) => boolean;
 
   addMaterialTemplate: (data: Omit<MaterialTemplate, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateMaterialTemplate: (id: string, data: Partial<MaterialTemplate>) => void;
@@ -130,6 +134,7 @@ export const useAppStore = create<AppState>()(
       purchaseItems: [],
       todos: [],
       preClaimants: [],
+      keyItemIds: [],
       materialTemplates: [],
 
       addActivity: (data) => {
@@ -155,14 +160,20 @@ export const useAppStore = create<AppState>()(
       },
 
       deleteActivity: (id) => {
-        set((state) => ({
-          activities: state.activities.filter((a) => a.id !== id),
-          items: state.items.filter((i) => i.activityId !== id),
-          records: state.records.filter((r) => r.activityId !== id),
-          purchaseItems: state.purchaseItems.filter((p) => p.activityId !== id),
-          todos: state.todos.filter((t) => t.activityId !== id),
-          preClaimants: state.preClaimants.filter((p) => p.activityId !== id),
-        }));
+        set((state) => {
+          const activityItemIds = state.items
+            .filter((i) => i.activityId === id)
+            .map((i) => i.id);
+          return {
+            activities: state.activities.filter((a) => a.id !== id),
+            items: state.items.filter((i) => i.activityId !== id),
+            records: state.records.filter((r) => r.activityId !== id),
+            purchaseItems: state.purchaseItems.filter((p) => p.activityId !== id),
+            todos: state.todos.filter((t) => t.activityId !== id),
+            preClaimants: state.preClaimants.filter((p) => p.activityId !== id),
+            keyItemIds: state.keyItemIds.filter((kid) => !activityItemIds.includes(kid)),
+          };
+        });
       },
 
       addTodo: (data) => {
@@ -215,6 +226,7 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           items: state.items.filter((i) => i.id !== id),
           records: state.records.filter((r) => r.itemId !== id),
+          keyItemIds: state.keyItemIds.filter((kid) => kid !== id),
         }));
       },
 
@@ -457,6 +469,21 @@ export const useAppStore = create<AppState>()(
             p.activityId === activityId &&
             p.name.trim().toLowerCase() === name.trim().toLowerCase()
         );
+      },
+
+      toggleKeyItem: (itemId) => {
+        set((state) => {
+          const exists = state.keyItemIds.includes(itemId);
+          return {
+            keyItemIds: exists
+              ? state.keyItemIds.filter((id) => id !== itemId)
+              : [...state.keyItemIds, itemId],
+          };
+        });
+      },
+
+      isKeyItem: (itemId) => {
+        return get().keyItemIds.includes(itemId);
       },
 
       addMaterialTemplate: (data) => {

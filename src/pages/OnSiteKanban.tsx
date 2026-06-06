@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   RefreshCw,
   Monitor,
+  Star,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { ItemType, ITEM_TYPE_CONFIG, ACTIVITY_STATUS_CONFIG } from '@/types';
@@ -30,10 +31,12 @@ export const OnSiteKanban: React.FC = () => {
     activities,
     items,
     records,
+    keyItemIds,
     getTodayClaimQuantity,
   } = useAppStore();
 
   const [selectedType, setSelectedType] = useState<ItemType | 'all'>('all');
+  const [keyItemMode, setKeyItemMode] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
@@ -57,9 +60,11 @@ export const OnSiteKanban: React.FC = () => {
 
   const filteredItems = useMemo(() => {
     return activityItems.filter((item) => {
-      return selectedType === 'all' || item.type === selectedType;
+      const matchesType = selectedType === 'all' || item.type === selectedType;
+      const matchesKeyItem = !keyItemMode || keyItemIds.includes(item.id);
+      return matchesType && matchesKeyItem;
     });
-  }, [activityItems, selectedType]);
+  }, [activityItems, selectedType, keyItemMode, keyItemIds]);
 
   const filteredRecords = useMemo(() => {
     if (selectedType === 'all') return recentRecords.slice(0, 10);
@@ -74,6 +79,10 @@ export const OnSiteKanban: React.FC = () => {
     });
     return map;
   }, [activityItems]);
+
+  const keyItemCount = useMemo(() => {
+    return activityItems.filter((item) => keyItemIds.includes(item.id)).length;
+  }, [activityItems, keyItemIds]);
 
   const filteredStats = useMemo(() => {
     const list = selectedType === 'all' ? activityItems : filteredItems;
@@ -216,14 +225,27 @@ export const OnSiteKanban: React.FC = () => {
           </div>
         </div>
 
-        {selectedType !== 'all' && (
+        {(selectedType !== 'all' || keyItemMode) && (
           <div className="mb-8 flex items-center gap-3 px-5 py-3 bg-yellow-500/15 border border-yellow-500/30 rounded-2xl">
             <Filter size={22} className="text-yellow-400" />
             <span className="text-yellow-200 text-lg font-medium">
-              当前筛选：{ITEM_TYPE_CONFIG[selectedType].label}（{filteredStats.totalItems} 种物资）
+              当前筛选：
+              {keyItemMode && (
+                <span className="inline-flex items-center gap-1 mr-2">
+                  <Star size={18} fill="currentColor" className="text-yellow-400" />
+                  重点物资
+                </span>
+              )}
+              {selectedType !== 'all' && (
+                <span>{ITEM_TYPE_CONFIG[selectedType].label}</span>
+              )}
+              <span className="ml-2">（{filteredStats.totalItems} 种物资）</span>
             </span>
             <button
-              onClick={() => setSelectedType('all')}
+              onClick={() => {
+                setSelectedType('all');
+                setKeyItemMode(false);
+              }}
               className="ml-auto px-4 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors"
             >
               清除筛选
@@ -245,7 +267,7 @@ export const OnSiteKanban: React.FC = () => {
               刷新数据
             </button>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3 mb-4">
             <button
               onClick={() => setSelectedType('all')}
               className={cn(
@@ -301,6 +323,31 @@ export const OnSiteKanban: React.FC = () => {
               );
             })}
           </div>
+
+          <div className="pt-4 border-t border-gray-700">
+            <button
+              onClick={() => setKeyItemMode(!keyItemMode)}
+              className={cn(
+                'px-6 py-3 rounded-xl font-medium text-lg transition-all flex items-center gap-2',
+                keyItemMode
+                  ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white'
+                  : 'bg-white/10 text-gray-300 hover:bg-white/20'
+              )}
+            >
+              <Star size={22} fill={keyItemMode ? 'currentColor' : 'none'} />
+              重点物资模式
+              <span
+                className={cn(
+                  'ml-1 px-2 py-0.5 rounded-full text-sm font-bold',
+                  keyItemMode
+                    ? 'bg-white/25 text-white'
+                    : 'bg-white/10 text-gray-400'
+                )}
+              >
+                {keyItemCount}
+              </span>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -321,25 +368,45 @@ export const OnSiteKanban: React.FC = () => {
                   const stockPercentage =
                     item.totalStock > 0 ? (item.currentStock / item.totalStock) * 100 : 0;
                   const todayClaimed = getTodayClaimQuantity(id!, item.id);
+                  const isKey = keyItemIds.includes(item.id);
+                  const isLowStock = stockPercentage <= 20;
+                  const isKeyLowStock = isKey && isLowStock;
 
                   return (
                     <div
                       key={item.id}
                       className={cn(
-                        'bg-white/5 rounded-2xl p-6 border-2 transition-all hover:bg-white/10',
-                        getStockBorderColor(stockPercentage)
+                        'rounded-2xl p-6 border-2 transition-all hover:bg-white/10',
+                        isKeyLowStock
+                          ? 'bg-red-900/30 border-red-500 ring-2 ring-red-400/50 animate-pulse'
+                          : isKey
+                            ? 'bg-yellow-900/20 border-yellow-500/60'
+                            : 'bg-white/5 ' + getStockBorderColor(stockPercentage)
                       )}
                     >
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-4">
                           <div
-                            className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
+                            className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl relative"
                             style={{ backgroundColor: typeConfig.color + '40' }}
                           >
                             {TYPE_ICONS[item.type]}
+                            {isKey && (
+                              <div className="absolute -top-2 -right-2 w-7 h-7 bg-yellow-500 rounded-full flex items-center justify-center shadow-lg">
+                                <Star size={16} fill="white" className="text-white" />
+                              </div>
+                            )}
                           </div>
                           <div>
-                            <h3 className="text-2xl font-bold text-white">{item.name}</h3>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-2xl font-bold text-white">{item.name}</h3>
+                              {isKey && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-500/30 text-yellow-300 rounded-full text-xs font-medium">
+                                  <Star size={12} fill="currentColor" />
+                                  重点
+                                </span>
+                              )}
+                            </div>
                             <span
                               className="inline-block mt-1 px-3 py-1 rounded-full text-sm font-medium"
                               style={{ backgroundColor: typeConfig.color + '30', color: typeConfig.color }}
@@ -350,7 +417,12 @@ export const OnSiteKanban: React.FC = () => {
                         </div>
                         <div className="text-right">
                           <p className="text-gray-400 text-sm">剩余库存</p>
-                          <p className="text-4xl font-bold text-white">{item.currentStock}</p>
+                          <p className={cn(
+                            'text-4xl font-bold',
+                            isKeyLowStock ? 'text-red-400' : 'text-white'
+                          )}>
+                            {item.currentStock}
+                          </p>
                         </div>
                       </div>
 
@@ -390,9 +462,29 @@ export const OnSiteKanban: React.FC = () => {
                       </div>
 
                       {stockPercentage <= 20 && (
-                        <div className="mt-4 flex items-center gap-2 p-4 bg-red-500/20 rounded-xl border border-red-500/30">
-                          <AlertTriangle size={24} className="text-red-400 flex-shrink-0" />
-                          <span className="text-red-300 font-medium">库存不足，请及时补充！</span>
+                        <div className={cn(
+                          'mt-4 flex items-center gap-2 p-4 rounded-xl border',
+                          isKey
+                            ? 'bg-red-600/30 border-red-500'
+                            : 'bg-red-500/20 border-red-500/30'
+                        )}>
+                          <AlertTriangle size={24} className={cn(
+                            'flex-shrink-0',
+                            isKey ? 'text-red-300 animate-pulse' : 'text-red-400'
+                          )} />
+                          <div>
+                            <span className={cn(
+                              'font-medium',
+                              isKey ? 'text-red-200 text-lg' : 'text-red-300'
+                            )}>
+                              {isKey ? '⚠️ 重点物资库存不足，请立即补充！' : '库存不足，请及时补充！'}
+                            </span>
+                            {isKey && (
+                              <p className="text-red-300/80 text-sm mt-1">
+                                剩余 {item.currentStock} / {item.totalStock} 个（{stockPercentage.toFixed(1)}%）
+                              </p>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>

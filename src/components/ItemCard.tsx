@@ -1,5 +1,5 @@
 import React from 'react';
-import { Edit2, Trash2, ExternalLink, DollarSign, Warehouse, Users } from 'lucide-react';
+import { Edit2, Trash2, ExternalLink, DollarSign, Warehouse, Users, Star } from 'lucide-react';
 import { Item, ITEM_TYPE_CONFIG } from '@/types';
 import { cn } from '@/utils/helpers';
 
@@ -7,9 +7,11 @@ interface ItemCardProps {
   item: Item;
   onEdit: () => void;
   onDelete: () => void;
+  isKeyItem?: boolean;
+  onToggleKeyItem?: () => void;
 }
 
-export const ItemCard: React.FC<ItemCardProps> = ({ item, onEdit, onDelete }) => {
+export const ItemCard: React.FC<ItemCardProps> = ({ item, onEdit, onDelete, isKeyItem, onToggleKeyItem }) => {
   const typeConfig = ITEM_TYPE_CONFIG[item.type];
   const stockPercentage = item.totalStock > 0 ? (item.currentStock / item.totalStock) * 100 : 0;
   const distributed = item.totalStock - item.currentStock;
@@ -21,10 +23,13 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onEdit, onDelete }) =>
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden border border-pink-50 hover:border-pink-100">
+    <div className={cn(
+      'bg-white rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden border',
+      isKeyItem ? 'border-yellow-400 ring-2 ring-yellow-200' : 'border-pink-50 hover:border-pink-100'
+    )}>
       <div
-        className="h-2"
-        style={{ backgroundColor: typeConfig.color }}
+        className={cn('h-2', isKeyItem && 'bg-gradient-to-r from-yellow-400 to-orange-400')}
+        style={!isKeyItem ? { backgroundColor: typeConfig.color } : undefined}
       />
       <div className="p-5">
         <div className="flex items-start justify-between mb-3">
@@ -51,6 +56,20 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onEdit, onDelete }) =>
             </div>
           </div>
           <div className="flex gap-1">
+            {onToggleKeyItem && (
+              <button
+                onClick={onToggleKeyItem}
+                className={cn(
+                  'p-2 rounded-lg transition-colors',
+                  isKeyItem
+                    ? 'bg-yellow-100 text-yellow-600 hover:bg-yellow-200'
+                    : 'hover:bg-gray-100 text-gray-400 hover:text-yellow-500'
+                )}
+                title={isKeyItem ? '取消重点物资' : '标记为重点物资'}
+              >
+                <Star size={16} fill={isKeyItem ? 'currentColor' : 'none'} />
+              </button>
+            )}
             <button
               onClick={onEdit}
               className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"

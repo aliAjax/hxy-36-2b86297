@@ -24,6 +24,7 @@ import {
   Zap,
   AlertTriangle,
   ArrowDownUp,
+  Star,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { StatsCard } from '@/components/StatsCard';
@@ -59,6 +60,7 @@ export const ActivityDetail: React.FC = () => {
     purchaseItems,
     todos,
     preClaimants,
+    keyItemIds,
     addItem,
     updateItem,
     deleteItem,
@@ -74,6 +76,7 @@ export const ActivityDetail: React.FC = () => {
     addPreClaimant,
     updatePreClaimant,
     deletePreClaimant,
+    toggleKeyItem,
     getActivityStats,
     getItemConsumptionData,
     getTypeDistributionData,
@@ -112,6 +115,7 @@ export const ActivityDetail: React.FC = () => {
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
   const [showOnlyLowStock, setShowOnlyLowStock] = useState(false);
   const [sortLowStockFirst, setSortLowStockFirst] = useState(false);
+  const [showOnlyKeyItems, setShowOnlyKeyItems] = useState(false);
 
   const activity = activities.find((a) => a.id === id);
   const activityItems = useMemo(
@@ -150,7 +154,8 @@ export const ActivityDetail: React.FC = () => {
         item.supplier.toLowerCase().includes(itemSearchQuery.toLowerCase());
       const matchesType = filterItemType === 'all' || item.type === filterItemType;
       const matchesLowStock = !showOnlyLowStock || item.currentStock < lowStockThreshold;
-      return matchesSearch && matchesType && matchesLowStock;
+      const matchesKeyItem = !showOnlyKeyItems || keyItemIds.includes(item.id);
+      return matchesSearch && matchesType && matchesLowStock && matchesKeyItem;
     });
 
     if (sortLowStockFirst) {
@@ -168,7 +173,7 @@ export const ActivityDetail: React.FC = () => {
     }
 
     return result;
-  }, [activityItems, itemSearchQuery, filterItemType, showOnlyLowStock, sortLowStockFirst, lowStockThreshold]);
+  }, [activityItems, itemSearchQuery, filterItemType, showOnlyLowStock, sortLowStockFirst, lowStockThreshold, showOnlyKeyItems, keyItemIds]);
 
   const filteredLowStockItemsCount = useMemo(
     () => filteredItems.filter((i) => i.currentStock < lowStockThreshold).length,
@@ -680,6 +685,21 @@ export const ActivityDetail: React.FC = () => {
 
                 <div className="flex flex-wrap gap-3 mb-6">
                   <button
+                    onClick={() => setShowOnlyKeyItems(!showOnlyKeyItems)}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all',
+                      showOnlyKeyItems
+                        ? 'bg-yellow-500 text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    <Star size={16} fill={showOnlyKeyItems ? 'currentColor' : 'none'} />
+                    只看重点物资
+                    <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-white/20">
+                      {activityItems.filter((i) => keyItemIds.includes(i.id)).length}
+                    </span>
+                  </button>
+                  <button
                     onClick={() => setShowOnlyLowStock(!showOnlyLowStock)}
                     className={cn(
                       'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all',
@@ -753,6 +773,8 @@ export const ActivityDetail: React.FC = () => {
                           item={item}
                           onEdit={() => handleEditItem(item)}
                           onDelete={() => handleDeleteItem(item.id)}
+                          isKeyItem={keyItemIds.includes(item.id)}
+                          onToggleKeyItem={() => toggleKeyItem(item.id)}
                         />
                       </div>
                     ))}
