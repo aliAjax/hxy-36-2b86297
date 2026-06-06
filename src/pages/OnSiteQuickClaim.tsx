@@ -712,7 +712,10 @@ export const OnSiteQuickClaim: React.FC = () => {
                           >
                             <div className="flex items-center gap-4">
                               <button
-                                onClick={() => handleMultiItemToggle(multiItem.itemId)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMultiItemToggle(multiItem.itemId);
+                                }}
                                 className={cn(
                                   'w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0',
                                   multiItem.selected
