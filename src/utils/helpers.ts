@@ -68,3 +68,9 @@ export const validateJsonData = (data: unknown): boolean => {
 export const cn = (...classes: (string | undefined | null | false)[]): string => {
   return classes.filter(Boolean).join(' ');
 };
+
+export const getExpectedItemCount = (expectedItems: string): number => {
+  const trimmed = expectedItems.trim();
+  if (!trimmed) return 0;
+  return (trimmed.match(/[、,，]/g) || []).length + 1;
+};

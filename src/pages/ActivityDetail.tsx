@@ -44,7 +44,7 @@ import { BatchClaimForm } from '@/components/BatchClaimForm';
 import { SaveAsTemplateDialog } from '@/components/SaveAsTemplateDialog';
 import { ApplyTemplateDialog } from '@/components/ApplyTemplateDialog';
 import { Modal } from '@/components/Modal';
-import { formatDate, cn } from '@/utils/helpers';
+import { formatDate, cn, getExpectedItemCount } from '@/utils/helpers';
 import { Item, PurchaseItem, Todo, PreClaimant, ACTIVITY_STATUS_CONFIG } from '@/types';
 
 type TabType = 'items' | 'records' | 'charts' | 'purchase' | 'todos' | 'preregister';
@@ -207,28 +207,40 @@ export const ActivityDetail: React.FC = () => {
     });
   }, [activityTodos, todoSearchQuery, filterTodoStatus]);
 
-  const preClaimantStatusMap = useMemo(() => {
+  const preClaimantStatusResult = useMemo(() => {
     const statusMap = new Map<string, ClaimStatus>();
+    const counts = {
+      total: activityPreClaimants.length,
+      'not-claimed': 0,
+      'partial-claimed': 0,
+      'fully-claimed': 0,
+    };
+
     activityPreClaimants.forEach((preClaimant) => {
       const claimantRecords = activityRecords.filter(
         (r) => r.claimerName.trim().toLowerCase() === preClaimant.name.trim().toLowerCase()
       );
-      
+
       let status: ClaimStatus = 'not-claimed';
       if (claimantRecords.length > 0) {
-        const expectedItems = preClaimant.expectedItems.trim();
-        if (expectedItems) {
-          const expectedItemCount = (expectedItems.match(/[、,，]/g) || []).length + 1;
-          const claimedItemCount = new Set(claimantRecords.map((r) => r.itemId)).size;
-          status = claimedItemCount >= expectedItemCount ? 'fully-claimed' : 'partial-claimed';
+        const expectedCount = getExpectedItemCount(preClaimant.expectedItems);
+        if (expectedCount > 0) {
+          const claimedCount = new Set(claimantRecords.map((r) => r.itemId)).size;
+          status = claimedCount >= expectedCount ? 'fully-claimed' : 'partial-claimed';
         } else {
           status = 'fully-claimed';
         }
       }
+
       statusMap.set(preClaimant.id, status);
+      counts[status]++;
     });
-    return statusMap;
+
+    return { statusMap, counts };
   }, [activityPreClaimants, activityRecords]);
+
+  const preClaimantStatusMap = preClaimantStatusResult.statusMap;
+  const preClaimantStatusCounts = preClaimantStatusResult.counts;
 
   const filteredPreClaimants = useMemo(() => {
     return activityPreClaimants.filter((p) => {
@@ -985,19 +997,6 @@ export const ActivityDetail: React.FC = () => {
                       className="w-full pl-11 pr-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all"
                     />
                   </div>
-                  <div className="relative">
-                    <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <select
-                      value={filterPreClaimantStatus}
-                      onChange={(e) => setFilterPreClaimantStatus(e.target.value)}
-                      className="pl-11 pr-10 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:border-pink-400 focus:ring-2 focus:ring-pink-50 outline-none transition-all appearance-none"
-                    >
-                      <option value="all">全部状态</option>
-                      <option value="not-claimed">未领取</option>
-                      <option value="partial-claimed">部分领取</option>
-                      <option value="fully-claimed">已领取</option>
-                    </select>
-                  </div>
                   <button
                     onClick={() => {
                       setEditingPreClaimant(null);
@@ -1010,7 +1009,7 @@ export const ActivityDetail: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="flex flex-wrap gap-2 mb-4">
+                <div className="flex flex-wrap gap-2 mb-6">
                   <button
                     onClick={() => setFilterPreClaimantStatus('all')}
                     className={cn(
@@ -1020,7 +1019,7 @@ export const ActivityDetail: React.FC = () => {
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     )}
                   >
-                    全部 ({activityPreClaimants.length})
+                    全部 ({preClaimantStatusCounts.total})
                   </button>
                   <button
                     onClick={() => setFilterPreClaimantStatus('not-claimed')}
@@ -1031,7 +1030,7 @@ export const ActivityDetail: React.FC = () => {
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     )}
                   >
-                    未领取 ({activityPreClaimants.filter((p) => preClaimantStatusMap.get(p.id) === 'not-claimed').length})
+                    未领取 ({preClaimantStatusCounts['not-claimed']})
                   </button>
                   <button
                     onClick={() => setFilterPreClaimantStatus('partial-claimed')}
@@ -1042,7 +1041,7 @@ export const ActivityDetail: React.FC = () => {
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     )}
                   >
-                    部分领取 ({activityPreClaimants.filter((p) => preClaimantStatusMap.get(p.id) === 'partial-claimed').length})
+                    部分领取 ({preClaimantStatusCounts['partial-claimed']})
                   </button>
                   <button
                     onClick={() => setFilterPreClaimantStatus('fully-claimed')}
@@ -1053,7 +1052,7 @@ export const ActivityDetail: React.FC = () => {
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     )}
                   >
-                    已领取 ({activityPreClaimants.filter((p) => preClaimantStatusMap.get(p.id) === 'fully-claimed').length})
+                    已领取 ({preClaimantStatusCounts['fully-claimed']})
                   </button>
                 </div>
 
