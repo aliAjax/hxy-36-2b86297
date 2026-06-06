@@ -607,6 +607,17 @@ export const useAppStore = create<AppState>()(
           ) {
             return { success: false, error: '数据格式不正确' };
           }
+
+          const migratedTemplates = Array.isArray(data.materialTemplates)
+            ? data.materialTemplates.map((template) => ({
+                ...template,
+                items: template.items.map((item: any) => ({
+                  ...item,
+                  id: item.id || generateId(),
+                })),
+              }))
+            : [];
+
           set({
             activities: data.activities,
             items: data.items,
@@ -614,7 +625,7 @@ export const useAppStore = create<AppState>()(
             purchaseItems: Array.isArray(data.purchaseItems) ? data.purchaseItems : [],
             todos: Array.isArray(data.todos) ? data.todos : [],
             preClaimants: Array.isArray(data.preClaimants) ? data.preClaimants : [],
-            materialTemplates: Array.isArray(data.materialTemplates) ? data.materialTemplates : [],
+            materialTemplates: migratedTemplates,
           });
           return { success: true };
         } catch (e) {
