@@ -213,39 +213,39 @@ export const ActivityDetail: React.FC = () => {
     });
   }, [activityTodos, todoSearchQuery, filterTodoStatus]);
 
-  const getTodoCountdownGroup = (todo: Todo): string => {
-    if (!activity) return 'other';
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const dueDate = new Date(todo.dueDate);
-    dueDate.setHours(0, 0, 0, 0);
-    
-    const actDate = new Date(activity.date);
-    actDate.setHours(0, 0, 0, 0);
-    
-    if (!todo.completed && dueDate < today) {
-      return 'overdue';
-    }
-    
-    const diffTime = actDate.getTime() - dueDate.getTime();
-    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays < 0) {
-      return 'after-activity';
-    } else if (diffDays === 0) {
-      return 'activity-day';
-    } else if (diffDays <= 3) {
-      return 'within-3-days';
-    } else if (diffDays <= 7) {
-      return 'within-7-days';
-    } else {
-      return 'more-than-7-days';
-    }
-  };
-
   const groupedTodos = useMemo(() => {
+    const getTodoCountdownGroup = (todo: Todo): string => {
+      if (!activity) return 'other';
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const dueDate = new Date(todo.dueDate);
+      dueDate.setHours(0, 0, 0, 0);
+
+      const actDate = new Date(activity.date);
+      actDate.setHours(0, 0, 0, 0);
+
+      if (!todo.completed && dueDate < today) {
+        return 'overdue';
+      }
+
+      const diffTime = actDate.getTime() - dueDate.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays < 0) {
+        return 'after-activity';
+      } else if (diffDays === 0) {
+        return 'activity-day';
+      } else if (diffDays <= 3) {
+        return 'within-3-days';
+      } else if (diffDays <= 7) {
+        return 'within-7-days';
+      } else {
+        return 'more-than-7-days';
+      }
+    };
+
     const groups: Record<string, Todo[]> = {
       'overdue': [],
       'activity-day': [],
@@ -254,14 +254,14 @@ export const ActivityDetail: React.FC = () => {
       'more-than-7-days': [],
       'after-activity': [],
     };
-    
+
     filteredTodos.forEach((todo) => {
       const group = getTodoCountdownGroup(todo);
       if (groups[group]) {
         groups[group].push(todo);
       }
     });
-    
+
     return groups;
   }, [filteredTodos, activity]);
 
@@ -1026,9 +1026,9 @@ export const ActivityDetail: React.FC = () => {
                     {Object.keys(countdownGroupConfig).map((groupKey) => {
                       const groupTodos = groupedTodos[groupKey] || [];
                       if (groupTodos.length === 0) return null;
-                      
+
                       const groupConfig = countdownGroupConfig[groupKey];
-                      
+
                       return (
                         <div key={groupKey}>
                           <div className="flex items-center gap-2 mb-3">
