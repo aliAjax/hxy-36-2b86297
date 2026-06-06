@@ -32,10 +32,13 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
   const template = materialTemplates.find((t) => t.id === selectedTemplateId);
 
   useEffect(() => {
-    if (template && template.items.length > 0 && selectedItemIds.size === 0) {
-      setSelectedItemIds(new Set(template.items.map((i) => i.id)));
+    const tpl = materialTemplates.find((t) => t.id === selectedTemplateId);
+    if (tpl && tpl.items.length > 0) {
+      setSelectedItemIds(new Set(tpl.items.map((i) => i.id)));
+    } else {
+      setSelectedItemIds(new Set());
     }
-  }, [template]);
+  }, [selectedTemplateId, materialTemplates]);
 
   const availableActivities = useMemo(
     () => activities.filter((a) => a.status !== 'completed'),

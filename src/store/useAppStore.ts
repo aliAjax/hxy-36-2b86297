@@ -608,10 +608,15 @@ export const useAppStore = create<AppState>()(
             return { success: false, error: '数据格式不正确' };
           }
 
-          const migratedTemplates = Array.isArray(data.materialTemplates)
-            ? data.materialTemplates.map((template) => ({
+          type TemplateItemWithOptionalId = Omit<MaterialTemplateItem, 'id'> & { id?: string };
+          type TemplateWithOptionalId = Omit<MaterialTemplate, 'items'> & {
+            items: TemplateItemWithOptionalId[];
+          };
+
+          const migratedTemplates: MaterialTemplate[] = Array.isArray(data.materialTemplates)
+            ? (data.materialTemplates as TemplateWithOptionalId[]).map((template) => ({
                 ...template,
-                items: template.items.map((item: any) => ({
+                items: template.items.map((item) => ({
                   ...item,
                   id: item.id || generateId(),
                 })),
