@@ -20,6 +20,9 @@ import {
   TemplateApplyAdjustments,
   MergeResult,
   MergeFieldSummary,
+  PurchaseStats,
+  TodoStats,
+  LowStockItem,
 } from '@/types';
 import { generateId, getDateKey } from '@/utils/helpers';
 
@@ -110,6 +113,9 @@ interface AppState {
   getTypeDistributionData: (activityId: string) => TypeDistributionData[];
   getTodayClaimQuantity: (activityId: string, itemId?: string) => number;
   getRecentRecords: (activityId: string, limit?: number) => ClaimRecord[];
+  getPurchaseStats: (activityId: string) => PurchaseStats;
+  getTodoStats: (activityId: string) => TodoStats;
+  getLowStockItems: (activityId: string, threshold: number) => LowStockItem[];
 
   runHealthCheck: () => HealthCheckResult;
   fixOrphanItems: () => { deletedCount: number; deletedIds: string[] };
@@ -990,6 +996,82 @@ export const useAppStore = create<AppState>()(
           .filter((r) => r.activityId === activityId)
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
           .slice(0, limit);
+      },
+
+      getPurchaseStats: (activityId) => {
+        const state = get();
+        const activityPurchaseItems = state.purchaseItems.filter((p) => p.activityId === activityId);
+
+        const total = activityPurchaseItems.length;
+        const pending = activityPurchaseItems.filter((p) => p.status === 'pending').length;
+        const ordered = activityPurchaseItems.filter((p) => p.status === 'ordered').length;
+        const shipped = activityPurchaseItems.filter((p) => p.status === 'shipped').length;
+        const completed = activityPurchaseItems.filter((p) => p.status === 'completed').length;
+        const cancelled = activityPurchaseItems.filter((p) => p.status === 'cancelled').length;
+
+        const activeCount = total - cancelled;
+        const completionRate = activeCount > 0 ? Math.round((completed / activeCount) * 100) : 0;
+
+        const totalBudget = activityPurchaseItems.reduce((sum, p) => sum + p.budget, 0);
+        const completedBudget = activityPurchaseItems
+          .filter((p) => p.status === 'completed')
+          .reduce((sum, p) => sum + p.budget, 0);
+
+        return {
+          total,
+          pending,
+          ordered,
+          shipped,
+          completed,
+          cancelled,
+          completionRate,
+          totalBudget,
+          completedBudget,
+        };
+      },
+
+      getTodoStats: (activityId) => {
+        const state = get();
+        const activityTodos = state.todos.filter((t) => t.activityId === activityId);
+
+        const total = activityTodos.length;
+        const completed = activityTodos.filter((t) => t.completed).length;
+        const pending = total - completed;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const overdue = activityTodos.filter(
+          (t) => !t.completed && new Date(t.dueDate) < today
+        ).length;
+
+        const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+        return {
+          total,
+          completed,
+          pending,
+          overdue,
+          completionRate,
+        };
+      },
+
+      getLowStockItems: (activityId, threshold) => {
+        const state = get();
+        const activityItems = state.items.filter((i) => i.activityId === activityId);
+
+        return activityItems
+          .filter((item) => item.currentStock < threshold)
+          .map((item) => ({
+            id: item.id,
+            name: item.name,
+            type: item.type,
+            typeLabel: ITEM_TYPE_CONFIG[item.type].label,
+            currentStock: item.currentStock,
+            totalStock: item.totalStock,
+            threshold,
+            shortage: threshold - item.currentStock,
+          }))
+          .sort((a, b) => a.currentStock - b.currentStock);
       },
 
       runHealthCheck: () => {

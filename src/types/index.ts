@@ -138,6 +138,37 @@ export interface TypeDistributionData {
   color: string;
 }
 
+export interface PurchaseStats {
+  total: number;
+  pending: number;
+  ordered: number;
+  shipped: number;
+  completed: number;
+  cancelled: number;
+  completionRate: number;
+  totalBudget: number;
+  completedBudget: number;
+}
+
+export interface TodoStats {
+  total: number;
+  completed: number;
+  pending: number;
+  overdue: number;
+  completionRate: number;
+}
+
+export interface LowStockItem {
+  id: string;
+  name: string;
+  type: ItemType;
+  typeLabel: string;
+  currentStock: number;
+  totalStock: number;
+  threshold: number;
+  shortage: number;
+}
+
 export const ITEM_TYPE_CONFIG: Record<ItemType, { label: string; icon: string; color: string }> = {
   lightstick: { label: '灯牌', icon: 'Lightbulb', color: '#FFB6C1' },
   banner: { label: '手幅', icon: 'Flag', color: '#E6E6FA' },

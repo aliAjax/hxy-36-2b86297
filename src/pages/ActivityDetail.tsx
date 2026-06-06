@@ -25,6 +25,8 @@ import {
   AlertTriangle,
   ArrowDownUp,
   Star,
+  Check,
+  PieChart,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { StatsCard } from '@/components/StatsCard';
@@ -91,6 +93,17 @@ export const ActivityDetail: React.FC = () => {
   const [isBatchClaimFormOpen, setIsBatchClaimFormOpen] = useState(false);
   const [isSaveAsTemplateOpen, setIsSaveAsTemplateOpen] = useState(false);
   const [isApplyTemplateOpen, setIsApplyTemplateOpen] = useState(false);
+  const [isReportConfigOpen, setIsReportConfigOpen] = useState(false);
+  const [selectedReportModules, setSelectedReportModules] = useState<string[]>([
+    'consumption',
+    'budget',
+    'claimers',
+    'duplicates',
+    'purchase',
+    'todos',
+    'lowStock',
+  ]);
+  const [reportLowStockThreshold, setReportLowStockThreshold] = useState(5);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [editingPurchaseItem, setEditingPurchaseItem] = useState<PurchaseItem | null>(null);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
@@ -550,13 +563,13 @@ export const ActivityDetail: React.FC = () => {
               <p className="text-white/80">{formatDate(activity.date)}</p>
             </div>
             <div className="flex gap-3">
-              <Link
-                to={`/activity/${id}/report`}
+              <button
+                onClick={() => setIsReportConfigOpen(true)}
                 className="flex items-center gap-2 px-6 py-3 bg-white/90 backdrop-blur-sm text-gray-700 rounded-xl font-medium hover:bg-white transition-all shadow-lg"
               >
                 <FileText size={20} />
                 复盘报告
-              </Link>
+              </button>
               <Link
                 to={`/activity/${id}/kanban`}
                 className="flex items-center gap-2 px-6 py-3 bg-white/90 backdrop-blur-sm text-gray-700 rounded-xl font-medium hover:bg-white transition-all shadow-lg"
@@ -1466,6 +1479,153 @@ export const ActivityDetail: React.FC = () => {
           >
             <Trash2 size={16} className="inline mr-2" />
             确认删除
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={isReportConfigOpen}
+        onClose={() => setIsReportConfigOpen(false)}
+        title="生成复盘报告"
+        size="lg"
+      >
+        <p className="text-gray-500 text-sm mb-6">
+          选择要包含在报告中的模块，然后点击"生成报告"查看完整报告。
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+          {[
+            { id: 'consumption', label: '物资消耗', icon: BarChart3, desc: '消耗趋势图与类型分布' },
+            { id: 'budget', label: '预算汇总', icon: DollarSign, desc: '各物资预算与发放情况' },
+            { id: 'claimers', label: '领取人数', icon: Users, desc: '领取人统计与明细' },
+            { id: 'duplicates', label: '重复领取提醒', icon: AlertTriangle, desc: '异常重复领取记录' },
+            { id: 'purchase', label: '采购完成情况', icon: ShoppingCart, desc: '采购进度与预算统计' },
+            { id: 'todos', label: '待办完成情况', icon: ClipboardList, desc: '待办事项完成进度' },
+            { id: 'lowStock', label: '低库存物资', icon: Package, desc: '低于阈值的物资清单' },
+          ].map((module) => {
+            const Icon = module.icon;
+            const isSelected = selectedReportModules.includes(module.id);
+            return (
+              <button
+                key={module.id}
+                onClick={() => {
+                  setSelectedReportModules((prev) =>
+                    isSelected
+                      ? prev.filter((m) => m !== module.id)
+                      : [...prev, module.id]
+                  );
+                }}
+                className={cn(
+                  'flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all',
+                  isSelected
+                    ? 'border-pink-400 bg-pink-50/50'
+                    : 'border-gray-100 bg-white hover:border-pink-200 hover:bg-pink-50/30'
+                )}
+              >
+                <div
+                  className={cn(
+                    'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0',
+                    isSelected ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-500'
+                  )}
+                >
+                  <Icon size={20} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-semibold text-gray-800">{module.label}</h4>
+                    {isSelected && (
+                      <Check size={16} className="text-pink-500 flex-shrink-0" />
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">{module.desc}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {selectedReportModules.includes('lowStock') && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-xl">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              低库存阈值
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min="1"
+                max="50"
+                value={reportLowStockThreshold}
+                onChange={(e) => setReportLowStockThreshold(parseInt(e.target.value))}
+                className="flex-1 accent-pink-500"
+              />
+              <span className="w-16 text-center font-bold text-pink-600">
+                {reportLowStockThreshold} 个
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              库存低于此数量的物资将被标记为低库存
+            </p>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between text-sm text-gray-500 mb-6">
+          <span>
+            已选择 <span className="font-bold text-pink-600">{selectedReportModules.length}</span> 个模块
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() =>
+                setSelectedReportModules([
+                  'consumption',
+                  'budget',
+                  'claimers',
+                  'duplicates',
+                  'purchase',
+                  'todos',
+                  'lowStock',
+                ])
+              }
+              className="text-pink-600 hover:text-pink-700 font-medium"
+            >
+              全选
+            </button>
+            <span className="text-gray-300">|</span>
+            <button
+              onClick={() => setSelectedReportModules([])}
+              className="text-gray-500 hover:text-gray-700 font-medium"
+            >
+              清空
+            </button>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={() => setIsReportConfigOpen(false)}
+            className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
+          >
+            取消
+          </button>
+          <button
+            onClick={() => {
+              if (selectedReportModules.length === 0) return;
+              const params = new URLSearchParams();
+              params.set('modules', selectedReportModules.join(','));
+              if (selectedReportModules.includes('lowStock')) {
+                params.set('threshold', String(reportLowStockThreshold));
+              }
+              navigate(`/activity/${id}/report?${params.toString()}`);
+              setIsReportConfigOpen(false);
+            }}
+            disabled={selectedReportModules.length === 0}
+            className={cn(
+              'flex-1 py-3 rounded-xl font-medium transition-all',
+              selectedReportModules.length > 0
+                ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white hover:from-pink-600 hover:to-purple-600 shadow-sm'
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            )}
+          >
+            生成报告
           </button>
         </div>
       </Modal>
