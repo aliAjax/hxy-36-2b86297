@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -15,6 +15,7 @@ import {
   List,
   LayoutGrid,
   XCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { formatDate, cn } from '@/utils/helpers';
@@ -82,14 +83,14 @@ export const OnSiteQuickClaim: React.FC = () => {
     [activityItems]
   );
   const selectedItem = activityItems.find((i) => i.id === selectedItemId);
+
   const recentRecords = useMemo(() => {
     if (!id) return [];
     return getRecentRecords(id, 15).map((r) => ({
       ...r,
       item: activityItems.find((i) => i.id === r.itemId),
     }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activityItems, id, getRecentRecords, records]);
+  }, [id, getRecentRecords, activityItems]);
 
   const lowStockItems = useMemo(
     () => activityItems.filter((i) => i.currentStock > 0 && i.currentStock <= 5),
@@ -103,16 +104,19 @@ export const OnSiteQuickClaim: React.FC = () => {
   }, [availableItems, selectedItemId]);
 
   useEffect(() => {
-    if (availableItems.length > 0 && multiClaimItems.length === 0) {
-      setMultiClaimItems(
-        availableItems.map((item) => ({
-          itemId: item.id,
-          quantity: 1,
-          selected: false,
-        }))
-      );
+    if (claimMode === 'multi' && availableItems.length > 0) {
+      const existingIds = new Set(multiClaimItems.map((m) => m.itemId));
+      const hasAll = availableItems.every((item) => existingIds.has(item.id));
+      if (!hasAll || multiClaimItems.length === 0) {
+        setMultiClaimItems(
+          availableItems.map((item) => {
+            const existing = multiClaimItems.find((m) => m.itemId === item.id);
+            return existing || { itemId: item.id, quantity: 1, selected: false };
+          })
+        );
+      }
     }
-  }, [availableItems, multiClaimItems.length]);
+  }, [availableItems, claimMode, multiClaimItems]);
 
   useEffect(() => {
     if (claimMode === 'single' && selectedItemId && claimerName.trim()) {
@@ -134,48 +138,60 @@ export const OnSiteQuickClaim: React.FC = () => {
     }
   }, [selectedItemId, claimerName, id, checkDuplicateClaim, findPreClaimantByName, claimMode]);
 
-  const getMultiItemStatus = (itemId: string) => {
-    const item = activityItems.find((i) => i.id === itemId);
-    const multiItem = multiClaimItems.find((m) => m.itemId === itemId);
+  const getMultiItemStatus = useCallback(
+    (itemId: string) => {
+      const item = activityItems.find((i) => i.id === itemId);
+      const multiItem = multiClaimItems.find((m) => m.itemId === itemId);
 
-    if (!item || !multiItem || !multiItem.selected) return null;
+      if (!item || !multiItem || !multiItem.selected) return null;
 
-    const isDuplicate = checkDuplicateClaim(id!, itemId, claimerName);
+      const isDuplicate = checkDuplicateClaim(id!, itemId, claimerName);
 
-    let status: 'valid' | 'warning' | 'error' = 'valid';
-    let message = '';
+      let status: 'valid' | 'warning' | 'error' = 'valid';
+      let message = '';
 
-    if (!claimerName.trim()) {
-      status = 'warning';
-      message = '请先输入领取人姓名';
-    } else if (item.currentStock < multiItem.quantity) {
-      status = 'error';
-      message = `库存不足，仅剩 ${item.currentStock} 个`;
-    } else if (isDuplicate && !multiForceSubmit) {
-      status = 'warning';
-      message = '该人员已领取过此物资';
-    }
+      if (!claimerName.trim()) {
+        status = 'warning';
+        message = '请先输入领取人姓名';
+      } else if (item.currentStock < multiItem.quantity) {
+        status = 'error';
+        message = `库存不足，仅剩 ${item.currentStock} 个`;
+      } else if (isDuplicate && !multiForceSubmit) {
+        status = 'warning';
+        message = '该人员已领取过此物资';
+      }
 
-    return { status, message, isDuplicate };
-  };
+      return { status, message, isDuplicate };
+    },
+    [activityItems, multiClaimItems, checkDuplicateClaim, id, claimerName, multiForceSubmit]
+  );
 
   const selectedMultiItems = useMemo(
     () => multiClaimItems.filter((m) => m.selected),
     [multiClaimItems]
   );
 
-  const canMultiSubmit = useMemo(() => {
-    if (!claimerName.trim()) return false;
-    if (selectedMultiItems.length === 0) return false;
-
-    return selectedMultiItems.every((m) => {
+  const submittableItems = useMemo(() => {
+    return selectedMultiItems.filter((m) => {
       const status = getMultiItemStatus(m.itemId);
       if (!status) return false;
       if (status.status === 'error') return false;
       if (status.status === 'warning' && status.isDuplicate && !multiForceSubmit) return false;
       return true;
     });
-  }, [selectedMultiItems, claimerName, multiForceSubmit, getMultiItemStatus]);
+  }, [selectedMultiItems, getMultiItemStatus, multiForceSubmit]);
+
+  const canMultiSubmit = useMemo(() => {
+    if (!claimerName.trim()) return false;
+    return submittableItems.length > 0;
+  }, [claimerName, submittableItems]);
+
+  const hasMultiErrors = useMemo(() => {
+    return selectedMultiItems.some((m) => {
+      const status = getMultiItemStatus(m.itemId);
+      return status?.status === 'error';
+    });
+  }, [selectedMultiItems, getMultiItemStatus]);
 
   const handleSubmit = () => {
     if (!selectedItemId || !claimerName.trim()) return;
@@ -280,28 +296,21 @@ export const OnSiteQuickClaim: React.FC = () => {
   const handleMultiSubmit = () => {
     if (!canMultiSubmit) return;
 
-    const recordsToAdd = selectedMultiItems
-      .filter((m) => {
-        const status = getMultiItemStatus(m.itemId);
-        return status && status.status !== 'error';
-      })
-      .map((m) => ({
-        activityId: id!,
-        itemId: m.itemId,
-        claimerName: claimerName.trim(),
-        contact: preClaimantMatch?.contact || '',
-        quantity: m.quantity,
-        note: '',
-      }));
+    const recordsToAdd = submittableItems.map((m) => ({
+      activityId: id!,
+      itemId: m.itemId,
+      claimerName: claimerName.trim(),
+      contact: preClaimantMatch?.contact || '',
+      quantity: m.quantity,
+      note: '',
+    }));
 
     const result = addRecordsBatch(recordsToAdd, multiForceSubmit);
 
     const claimResults: MultiClaimResult[] = selectedMultiItems.map((m) => {
       const item = activityItems.find((i) => i.id === m.itemId)!;
       const batchResult = result.results.find(
-        (r) =>
-          r.record?.itemId === m.itemId &&
-          r.record?.claimerName === claimerName.trim()
+        (r) => r.record?.itemId === m.itemId && r.record?.claimerName === claimerName.trim()
       );
 
       if (batchResult) {
@@ -327,6 +336,24 @@ export const OnSiteQuickClaim: React.FC = () => {
 
     setMultiClaimResults(claimResults);
     setShowMultiResult(true);
+  };
+
+  const handleRetryFailed = () => {
+    if (!multiClaimResults) return;
+
+    const failedItemIds = new Set(
+      multiClaimResults.filter((r) => !r.success).map((r) => r.item.id)
+    );
+
+    setMultiClaimItems((prev) =>
+      prev.map((m) => ({
+        ...m,
+        selected: failedItemIds.has(m.itemId),
+      }))
+    );
+
+    setShowMultiResult(false);
+    setMultiClaimResults(null);
   };
 
   const handleMultiResultClose = () => {
@@ -654,7 +681,7 @@ export const OnSiteQuickClaim: React.FC = () => {
 
                     <div className="mb-4 flex items-center justify-between">
                       <label className="text-sm font-medium text-gray-400">
-                        选择物资（已选 {selectedMultiItems.length} 项）
+                        选择物资（已选 {selectedMultiItems.length} 项，可提交 {submittableItems.length} 项）
                       </label>
                       <div className="flex gap-2">
                         <button
@@ -796,6 +823,20 @@ export const OnSiteQuickClaim: React.FC = () => {
                       </div>
                     )}
 
+                    {hasMultiErrors && (
+                      <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                        <div className="flex items-start gap-2 text-yellow-300 text-sm">
+                          <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-medium">部分物资无法提交</p>
+                            <p className="text-yellow-400/70 mt-0.5">
+                              存在库存不足的物资，提交时将跳过这些项，仅发放可提交的物资
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <button
                       onClick={handleMultiSubmit}
                       disabled={!canMultiSubmit}
@@ -807,7 +848,7 @@ export const OnSiteQuickClaim: React.FC = () => {
                       )}
                     >
                       <Zap className="inline mr-2" size={22} />
-                      批量登记领取（{selectedMultiItems.length} 项）
+                      批量登记领取（{submittableItems.length} 项可提交）
                     </button>
                   </>
                 )}
@@ -1019,7 +1060,16 @@ export const OnSiteQuickClaim: React.FC = () => {
               ))}
             </div>
 
-            <div className="p-6 border-t border-gray-700">
+            <div className="p-6 border-t border-gray-700 space-y-3">
+              {multiClaimResults.some((r) => !r.success) && (
+                <button
+                  onClick={handleRetryFailed}
+                  className="w-full py-3 bg-gray-700 text-white rounded-xl font-medium hover:bg-gray-600 transition-all flex items-center justify-center gap-2"
+                >
+                  <RefreshCw size={18} />
+                  重试失败项
+                </button>
+              )}
               <button
                 onClick={handleMultiResultClose}
                 className="w-full py-4 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-xl font-bold text-lg hover:from-pink-600 hover:to-purple-600 transition-all shadow-lg"
