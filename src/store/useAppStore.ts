@@ -827,9 +827,12 @@ export const useAppStore = create<AppState>()(
               id: item.id || generateId(),
             }));
 
+            const mappedSourceActivityId = activityIdMap.get(template.sourceActivityId) || template.sourceActivityId;
+
             if (!localTemplateIds.has(template.id)) {
               const newTemplate: MaterialTemplate = {
                 ...template,
+                sourceActivityId: mappedSourceActivityId,
                 items: migratedItems,
               } as MaterialTemplate;
               mergedTemplates.push(newTemplate);
@@ -841,6 +844,7 @@ export const useAppStore = create<AppState>()(
               const newTemplate: MaterialTemplate = {
                 ...template,
                 id: newId,
+                sourceActivityId: mappedSourceActivityId,
                 items: migratedItems,
               } as MaterialTemplate;
               mergedTemplates.push(newTemplate);
