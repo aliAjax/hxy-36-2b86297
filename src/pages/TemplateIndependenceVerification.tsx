@@ -203,6 +203,7 @@ export const TemplateIndependenceVerification: React.FC = () => {
       const snap = new Map<string, MaterialTemplateItem>();
       applyResult.createdItems.forEach((item) => {
         snap.set(item.id, {
+          id: item.id,
           name: item.name,
           type: item.type,
           designUrl: item.designUrl,

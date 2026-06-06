@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MaterialTemplateItem, ItemType } from '@/types';
 import { Modal } from './Modal';
+import { generateId } from '@/utils/helpers';
 
 interface MaterialTemplateItemFormProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ const typeOptions: { value: ItemType; label: string; emoji: string }[] = [
 ];
 
 const defaultFormData: MaterialTemplateItem = {
+  id: '',
   name: '',
   type: 'other' as ItemType,
   designUrl: '',
@@ -48,7 +50,10 @@ export const MaterialTemplateItemForm: React.FC<MaterialTemplateItemFormProps> =
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) return;
-    onSubmit(formData);
+    const submitData = item
+      ? formData
+      : { ...formData, id: generateId() };
+    onSubmit(submitData);
     onClose();
   };
 

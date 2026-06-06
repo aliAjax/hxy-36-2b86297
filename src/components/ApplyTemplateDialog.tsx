@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Copy, DollarSign, Warehouse, Truck, Check } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { Modal } from '@/components/Modal';
@@ -27,8 +27,15 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
   const [budgetMultiplier, setBudgetMultiplier] = useState(1);
   const [supplierOverride, setSupplierOverride] = useState('');
   const [error, setError] = useState('');
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
   const template = materialTemplates.find((t) => t.id === selectedTemplateId);
+
+  useEffect(() => {
+    if (template && template.items.length > 0 && selectedItemIds.size === 0) {
+      setSelectedItemIds(new Set(template.items.map((i) => i.id)));
+    }
+  }, [template]);
 
   const availableActivities = useMemo(
     () => activities.filter((a) => a.status !== 'completed'),
@@ -37,7 +44,41 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
 
   const needsTemplateSelection = !templateId;
 
+  const toggleItem = (id: string) => {
+    setSelectedItemIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (!template) return;
+    if (selectedItemIds.size === template.items.length) {
+      setSelectedItemIds(new Set());
+    } else {
+      setSelectedItemIds(new Set(template.items.map((i) => i.id)));
+    }
+  };
+
   const previewItems = useMemo(() => {
+    if (!template) return [];
+    return template.items
+      .filter((item) => selectedItemIds.has(item.id))
+      .map((item) => {
+        const adjustedStock = Math.round(item.totalStock * stockMultiplier);
+        const adjustedBudget = Math.round(item.budget * budgetMultiplier);
+        const finalSupplier = supplierOverride.trim() || item.supplier;
+        const typeConfig = ITEM_TYPE_CONFIG[item.type];
+        return { ...item, adjustedStock, adjustedBudget, finalSupplier, typeConfig };
+      });
+  }, [template, stockMultiplier, budgetMultiplier, supplierOverride, selectedItemIds]);
+
+  const allTemplateItems = useMemo(() => {
     if (!template) return [];
     return template.items.map((item) => {
       const adjustedStock = Math.round(item.totalStock * stockMultiplier);
@@ -70,10 +111,16 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
       return;
     }
 
+    if (selectedItemIds.size === 0) {
+      setError('请至少选择一项物资');
+      return;
+    }
+
     const result = applyTemplateToActivity(selectedTemplateId, targetActivityId, {
       stockMultiplier,
       budgetMultiplier,
       supplierOverride,
+      selectedItemIds: Array.from(selectedItemIds),
     });
 
     if (result.success) {
@@ -91,11 +138,23 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
     setBudgetMultiplier(1);
     setSupplierOverride('');
     setError('');
+    setSelectedItemIds(new Set());
   };
 
   const handleClose = () => {
     resetForm();
     onClose();
+  };
+
+  const handleTemplateSelect = (tplId: string) => {
+    setSelectedTemplateId(tplId);
+    setStockMultiplier(1);
+    setBudgetMultiplier(1);
+    setSupplierOverride('');
+    const tpl = materialTemplates.find((t) => t.id === tplId);
+    if (tpl) {
+      setSelectedItemIds(new Set(tpl.items.map((i) => i.id)));
+    }
   };
 
   return (
@@ -119,12 +178,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                 {materialTemplates.map((t) => (
                   <button
                     key={t.id}
-                    onClick={() => {
-                      setSelectedTemplateId(t.id);
-                      setStockMultiplier(1);
-                      setBudgetMultiplier(1);
-                      setSupplierOverride('');
-                    }}
+                    onClick={() => handleTemplateSelect(t.id)}
                     className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
                       selectedTemplateId === t.id
                         ? 'border-pink-300 bg-pink-50/50'
@@ -276,7 +330,19 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
             </div>
 
             <div>
-              <h3 className="text-sm font-bold text-gray-700 mb-3">创建预览</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-gray-700">选择要创建的物资</h3>
+                <button
+                  onClick={toggleAll}
+                  className="text-xs text-pink-500 hover:text-pink-600 font-medium transition-colors"
+                >
+                  {selectedItemIds.size === template.items.length ? '取消全选' : '全选'}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mb-3">
+                已选 {selectedItemIds.size} / {template.items.length} 项
+              </p>
+
               <div className="grid grid-cols-2 gap-3 mb-3">
                 <div className="p-3 bg-green-50 rounded-xl text-center">
                   <p className="text-xs text-gray-500 mb-1">库存合计</p>
@@ -298,48 +364,65 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                 </div>
               </div>
 
-              <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
-                {previewItems.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-xl text-sm"
-                  >
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
-                      style={{ backgroundColor: item.typeConfig.color + '30' }}
+              <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                {allTemplateItems.map((item) => {
+                  const isSelected = selectedItemIds.has(item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => toggleItem(item.id)}
+                      className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-all text-left ${
+                        isSelected
+                          ? 'border-pink-300 bg-pink-50/50'
+                          : 'border-gray-100 bg-gray-50/50 hover:border-gray-200'
+                      }`}
                     >
-                      {item.type === 'lightstick' && '💡'}
-                      {item.type === 'banner' && '🎏'}
-                      {item.type === 'sticker' && '🌟'}
-                      {item.type === 'freepack' && '🎁'}
-                      {item.type === 'lottery' && '🎰'}
-                      {item.type === 'other' && '📦'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-800 truncate">{item.name}</p>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs flex-shrink-0">
-                      <span className="text-green-600">
-                        {item.adjustedStock}
-                        {item.adjustedStock !== item.totalStock && (
-                          <span className="text-gray-400">/{item.totalStock}</span>
-                        )}
-                      </span>
-                      <span className="text-pink-600">
-                        ¥{item.adjustedBudget}
-                        {item.adjustedBudget !== item.budget && (
-                          <span className="text-gray-400">/¥{item.budget}</span>
-                        )}
-                      </span>
-                      <span
-                        className="text-blue-600 max-w-16 truncate"
-                        title={item.finalSupplier}
+                      <div
+                        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${
+                          isSelected
+                            ? 'border-pink-500 bg-pink-500'
+                            : 'border-gray-300'
+                        }`}
                       >
-                        {item.finalSupplier || '-'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                        {isSelected && <Check size={12} className="text-white" />}
+                      </div>
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
+                        style={{ backgroundColor: item.typeConfig.color + '30' }}
+                      >
+                        {item.type === 'lightstick' && '💡'}
+                        {item.type === 'banner' && '🎏'}
+                        {item.type === 'sticker' && '🌟'}
+                        {item.type === 'freepack' && '🎁'}
+                        {item.type === 'lottery' && '🎰'}
+                        {item.type === 'other' && '📦'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-800 truncate">{item.name}</p>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs flex-shrink-0">
+                        <span className="text-green-600">
+                          {item.adjustedStock}
+                          {item.adjustedStock !== item.totalStock && (
+                            <span className="text-gray-400">/{item.totalStock}</span>
+                          )}
+                        </span>
+                        <span className="text-pink-600">
+                          ¥{item.adjustedBudget}
+                          {item.adjustedBudget !== item.budget && (
+                            <span className="text-gray-400">/¥{item.budget}</span>
+                          )}
+                        </span>
+                        <span
+                          className="text-blue-600 max-w-16 truncate"
+                          title={item.finalSupplier}
+                        >
+                          {item.finalSupplier || '-'}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </>
@@ -362,7 +445,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
           </button>
           <button
             onClick={handleApply}
-            disabled={!selectedTemplateId || !targetActivityId}
+            disabled={!selectedTemplateId || !targetActivityId || selectedItemIds.size === 0}
             className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-medium hover:from-green-600 hover:to-emerald-600 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Copy size={16} className="inline mr-2" />

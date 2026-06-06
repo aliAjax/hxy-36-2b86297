@@ -503,6 +503,7 @@ export const useAppStore = create<AppState>()(
         }
 
         const templateItems: MaterialTemplateItem[] = activityItems.map((item) => ({
+          id: generateId(),
           name: item.name,
           type: item.type,
           designUrl: item.designUrl,
@@ -544,7 +545,18 @@ export const useAppStore = create<AppState>()(
           return { success: false, createdItems: [], error: '目标活动不存在' };
         }
 
-        const createdItems: Item[] = template.items.map((templateItem) => {
+        let itemsToCreate = template.items;
+        if (adjustments.selectedItemIds && adjustments.selectedItemIds.length > 0) {
+          itemsToCreate = template.items.filter((item) =>
+            adjustments.selectedItemIds!.includes(item.id)
+          );
+        }
+
+        if (itemsToCreate.length === 0) {
+          return { success: false, createdItems: [], error: '请至少选择一项物资' };
+        }
+
+        const createdItems: Item[] = itemsToCreate.map((templateItem) => {
           const adjustedStock = Math.round(templateItem.totalStock * adjustments.stockMultiplier);
           const adjustedBudget = Math.round(templateItem.budget * adjustments.budgetMultiplier);
           const finalSupplier = adjustments.supplierOverride.trim() || templateItem.supplier;
@@ -986,6 +998,26 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'cheering-material-storage',
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        let hasChanges = false;
+        const migratedTemplates = state.materialTemplates.map((template) => {
+          const migratedItems = template.items.map((item) => {
+            if (!item.id) {
+              hasChanges = true;
+              return { ...item, id: generateId() };
+            }
+            return item;
+          });
+          if (migratedItems !== template.items) {
+            return { ...template, items: migratedItems };
+          }
+          return template;
+        });
+        if (hasChanges) {
+          state.materialTemplates = migratedTemplates;
+        }
+      },
     }
   )
 );

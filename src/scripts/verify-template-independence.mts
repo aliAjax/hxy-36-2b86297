@@ -123,6 +123,7 @@ async function runVerification() {
   const snapshot = new Map<string, MaterialTemplateItem>();
   applyResult.createdItems.forEach((item) => {
     snapshot.set(item.id, {
+      id: item.id,
       name: item.name,
       type: item.type,
       designUrl: item.designUrl,

@@ -76,6 +76,7 @@ export interface PurchaseItem {
 }
 
 export interface MaterialTemplateItem {
+  id: string;
   name: string;
   type: ItemType;
   designUrl: string;
@@ -101,6 +102,7 @@ export interface TemplateApplyAdjustments {
   stockMultiplier: number;
   budgetMultiplier: number;
   supplierOverride: string;
+  selectedItemIds?: string[];
 }
 
 export interface AppData {
