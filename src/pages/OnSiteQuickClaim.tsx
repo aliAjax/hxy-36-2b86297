@@ -46,7 +46,6 @@ export const OnSiteQuickClaim: React.FC = () => {
   const {
     activities,
     items,
-    records,
     addRecord,
     addRecordsBatch,
     checkDuplicateClaim,
@@ -104,19 +103,19 @@ export const OnSiteQuickClaim: React.FC = () => {
   }, [availableItems, selectedItemId]);
 
   useEffect(() => {
-    if (claimMode === 'multi' && availableItems.length > 0) {
+    if (claimMode === 'multi' && activityItems.length > 0) {
       const existingIds = new Set(multiClaimItems.map((m) => m.itemId));
-      const hasAll = availableItems.every((item) => existingIds.has(item.id));
+      const hasAll = activityItems.every((item) => existingIds.has(item.id));
       if (!hasAll || multiClaimItems.length === 0) {
         setMultiClaimItems(
-          availableItems.map((item) => {
+          activityItems.map((item) => {
             const existing = multiClaimItems.find((m) => m.itemId === item.id);
             return existing || { itemId: item.id, quantity: 1, selected: false };
           })
         );
       }
     }
-  }, [availableItems, claimMode, multiClaimItems]);
+  }, [activityItems, claimMode, multiClaimItems]);
 
   useEffect(() => {
     if (claimMode === 'single' && selectedItemId && claimerName.trim()) {
@@ -380,7 +379,7 @@ export const OnSiteQuickClaim: React.FC = () => {
     setMultiForceSubmit(false);
     if (mode === 'multi') {
       setMultiClaimItems(
-        availableItems.map((item) => ({
+        activityItems.map((item) => ({
           itemId: item.id,
           quantity: 1,
           selected: false,
@@ -394,7 +393,13 @@ export const OnSiteQuickClaim: React.FC = () => {
 
   const selectAllItems = () => {
     setMultiClaimItems((prev) =>
-      prev.map((m) => ({ ...m, selected: true }))
+      prev.map((m) => {
+        const item = activityItems.find((i) => i.id === m.itemId);
+        if (item && item.currentStock > 0) {
+          return { ...m, selected: true };
+        }
+        return m;
+      })
     );
   };
 
@@ -704,6 +709,7 @@ export const OnSiteQuickClaim: React.FC = () => {
                       {multiClaimItems.map((multiItem) => {
                         const item = activityItems.find((i) => i.id === multiItem.itemId);
                         const status = getMultiItemStatus(multiItem.itemId);
+                        const isOutOfStock = item && item.currentStock === 0;
 
                         if (!item) return null;
 
@@ -718,16 +724,21 @@ export const OnSiteQuickClaim: React.FC = () => {
                                   : status?.status === 'warning'
                                   ? 'border-orange-500 bg-orange-500/10'
                                   : 'border-pink-500 bg-pink-500/20'
+                                : isOutOfStock
+                                ? 'border-gray-700 bg-gray-800/50 opacity-60'
                                 : 'border-gray-700 bg-gray-800 hover:border-gray-600'
                             )}
                           >
                             <div className="flex items-center gap-4">
                               <button
                                 onClick={() => handleMultiItemToggle(multiItem.itemId)}
+                                disabled={isOutOfStock}
                                 className={cn(
                                   'w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0',
                                   multiItem.selected
                                     ? 'bg-pink-500 border-pink-500'
+                                    : isOutOfStock
+                                    ? 'border-gray-600 cursor-not-allowed'
                                     : 'border-gray-500 hover:border-gray-400'
                                 )}
                               >
@@ -739,19 +750,42 @@ export const OnSiteQuickClaim: React.FC = () => {
                               <div className="flex-1 min-w-0">
                                 <div className="font-medium text-white">{item.name}</div>
                                 <div className="text-sm text-gray-400">
-                                  剩余 <span className="text-green-400 font-bold">{item.currentStock}</span> 个
+                                  剩余{' '}
+                                  <span
+                                    className={cn(
+                                      'font-bold',
+                                      item.currentStock > 5
+                                        ? 'text-green-400'
+                                        : item.currentStock > 0
+                                        ? 'text-yellow-400'
+                                        : 'text-red-400'
+                                    )}
+                                  >
+                                    {item.currentStock}
+                                  </span>{' '}
+                                  个
                                 </div>
                                 {status && status.message && (
-                                  <div className={cn(
-                                    'text-sm mt-1 flex items-center gap-1',
-                                    status.status === 'error' ? 'text-red-400' : 'text-orange-400'
-                                  )}>
+                                  <div
+                                    className={cn(
+                                      'text-sm mt-1 flex items-center gap-1',
+                                      status.status === 'error'
+                                        ? 'text-red-400'
+                                        : 'text-orange-400'
+                                    )}
+                                  >
                                     {status.status === 'error' ? (
                                       <XCircle size={14} />
                                     ) : (
                                       <AlertTriangle size={14} />
                                     )}
                                     {status.message}
+                                  </div>
+                                )}
+                                {!multiItem.selected && isOutOfStock && (
+                                  <div className="text-sm mt-1 flex items-center gap-1 text-red-400">
+                                    <XCircle size={14} />
+                                    库存已耗尽
                                   </div>
                                 )}
                               </div>
@@ -781,10 +815,14 @@ export const OnSiteQuickClaim: React.FC = () => {
                                       e.stopPropagation();
                                       handleMultiQuantityChange(multiItem.itemId, 1);
                                     }}
-                                    disabled={multiItem.quantity >= item.currentStock}
+                                    disabled={
+                                      multiItem.quantity >= item.currentStock ||
+                                      item.currentStock === 0
+                                    }
                                     className={cn(
                                       'w-10 h-10 rounded-lg flex items-center justify-center transition-all',
-                                      multiItem.quantity >= item.currentStock
+                                      multiItem.quantity >= item.currentStock ||
+                                      item.currentStock === 0
                                         ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
                                         : 'bg-gray-600 text-white hover:bg-gray-500'
                                     )}
