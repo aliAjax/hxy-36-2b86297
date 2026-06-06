@@ -116,6 +116,7 @@ export const ActivityDetail: React.FC = () => {
   const [showOnlyLowStock, setShowOnlyLowStock] = useState(false);
   const [sortLowStockFirst, setSortLowStockFirst] = useState(false);
   const [showOnlyKeyItems, setShowOnlyKeyItems] = useState(false);
+  const [todoViewMode, setTodoViewMode] = useState<'list' | 'countdown'>('list');
 
   const activity = activities.find((a) => a.id === id);
   const activityItems = useMemo(
@@ -211,6 +212,67 @@ export const ActivityDetail: React.FC = () => {
       return matchesSearch && matchesStatus;
     });
   }, [activityTodos, todoSearchQuery, filterTodoStatus]);
+
+  const getTodoCountdownGroup = (todo: Todo): string => {
+    if (!activity) return 'other';
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const dueDate = new Date(todo.dueDate);
+    dueDate.setHours(0, 0, 0, 0);
+    
+    const actDate = new Date(activity.date);
+    actDate.setHours(0, 0, 0, 0);
+    
+    if (!todo.completed && dueDate < today) {
+      return 'overdue';
+    }
+    
+    const diffTime = actDate.getTime() - dueDate.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+      return 'after-activity';
+    } else if (diffDays === 0) {
+      return 'activity-day';
+    } else if (diffDays <= 3) {
+      return 'within-3-days';
+    } else if (diffDays <= 7) {
+      return 'within-7-days';
+    } else {
+      return 'more-than-7-days';
+    }
+  };
+
+  const groupedTodos = useMemo(() => {
+    const groups: Record<string, Todo[]> = {
+      'overdue': [],
+      'activity-day': [],
+      'within-3-days': [],
+      'within-7-days': [],
+      'more-than-7-days': [],
+      'after-activity': [],
+    };
+    
+    filteredTodos.forEach((todo) => {
+      const group = getTodoCountdownGroup(todo);
+      if (groups[group]) {
+        groups[group].push(todo);
+      }
+    });
+    
+    return groups;
+  }, [filteredTodos, activity]);
+
+  const countdownGroupConfig: Record<string, { label: string; color: string; icon: string }> = {
+    'overdue': { label: '已逾期', color: 'red', icon: '⏰' },
+    'activity-day': { label: '活动当天', color: 'pink', icon: '🎉' },
+    'within-3-days': { label: '活动前3天内', color: 'orange', icon: '🔥' },
+    'within-7-days': { label: '活动前7天内', color: 'yellow', icon: '📅' },
+    'more-than-7-days': { label: '7天以上', color: 'green', icon: '🌱' },
+    'after-activity': { label: '活动后', color: 'purple', icon: '📌' },
+  };
 
   const preClaimantStatusResult = useMemo(() => {
     const statusMap = new Map<string, ClaimStatus>();
@@ -898,7 +960,34 @@ export const ActivityDetail: React.FC = () => {
                   </button>
                 </div>
 
-                {filteredTodos.length === 0 ? (
+                <div className="flex gap-2 mb-6">
+                  <button
+                    onClick={() => setTodoViewMode('list')}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all',
+                      todoViewMode === 'list'
+                        ? 'bg-pink-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    <ListTodo size={16} />
+                    列表视图
+                  </button>
+                  <button
+                    onClick={() => setTodoViewMode('countdown')}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all',
+                      todoViewMode === 'countdown'
+                        ? 'bg-pink-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    <Clock size={16} />
+                    活动倒计时
+                  </button>
+                </div>
+
+                {filteredTodos.length === 0 && (
                   <div className="text-center py-16">
                     <div className="w-20 h-20 mx-auto mb-4 bg-pink-50 rounded-full flex items-center justify-center">
                       <span className="text-3xl">📋</span>
@@ -912,7 +1001,9 @@ export const ActivityDetail: React.FC = () => {
                         : '试试其他搜索条件'}
                     </p>
                   </div>
-                ) : (
+                )}
+
+                {filteredTodos.length > 0 && todoViewMode === 'list' && (
                   <div className="space-y-3">
                     {filteredTodos.map((todo, index) => (
                       <div
@@ -927,6 +1018,44 @@ export const ActivityDetail: React.FC = () => {
                         />
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {filteredTodos.length > 0 && todoViewMode === 'countdown' && (
+                  <div className="space-y-6">
+                    {Object.keys(countdownGroupConfig).map((groupKey) => {
+                      const groupTodos = groupedTodos[groupKey] || [];
+                      if (groupTodos.length === 0) return null;
+                      
+                      const groupConfig = countdownGroupConfig[groupKey];
+                      
+                      return (
+                        <div key={groupKey}>
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-xl">{groupConfig.icon}</span>
+                            <h3 className="font-bold text-gray-800">{groupConfig.label}</h3>
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full">
+                              {groupTodos.length}
+                            </span>
+                          </div>
+                          <div className="space-y-3">
+                            {groupTodos.map((todo, index) => (
+                              <div
+                                key={todo.id}
+                                style={{ animation: `fadeInUp 0.3s ease-out ${index * 0.03}s both` }}
+                              >
+                                <TodoItem
+                                  todo={todo}
+                                  onToggle={() => toggleTodo(todo.id)}
+                                  onDelete={() => handleDeleteTodo(todo.id)}
+                                  onEdit={() => handleEditTodo(todo)}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
