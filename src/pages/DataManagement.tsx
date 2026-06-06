@@ -7,16 +7,99 @@ import { downloadFile, readFileAsText, formatFileSize } from '@/utils/helpers';
 import { AppData } from '@/types';
 import { Link } from 'react-router-dom';
 
+interface ImportAnalysis {
+  counts: {
+    activities: number;
+    items: number;
+    records: number;
+    purchaseItems: number;
+    todos: number;
+    preClaimants: number;
+    materialTemplates: number;
+  };
+  currentCounts: {
+    activities: number;
+    items: number;
+    records: number;
+    purchaseItems: number;
+    todos: number;
+    preClaimants: number;
+    materialTemplates: number;
+  };
+  missingFields: string[];
+}
+
+const DATA_FIELD_LABELS: Record<string, { label: string; icon: string; color: string }> = {
+  activities: { label: '活动', icon: '🎪', color: 'pink' },
+  items: { label: '物资', icon: '📦', color: 'purple' },
+  records: { label: '领取记录', icon: '📝', color: 'blue' },
+  purchaseItems: { label: '采购项', icon: '🛒', color: 'orange' },
+  todos: { label: '待办', icon: '✅', color: 'green' },
+  preClaimants: { label: '预登记', icon: '📋', color: 'yellow' },
+  materialTemplates: { label: '模板', icon: '📑', color: 'indigo' },
+};
+
 export const DataManagement: React.FC = () => {
-  const { activities, items, records, exportData, importData, clearAllData } = useAppStore();
+  const {
+    activities,
+    items,
+    records,
+    purchaseItems,
+    todos,
+    preClaimants,
+    materialTemplates,
+    exportData,
+    importData,
+    clearAllData,
+  } = useAppStore();
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [importPreview, setImportPreview] = useState<AppData | null>(null);
+  const [importAnalysis, setImportAnalysis] = useState<ImportAnalysis | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [showSuccessToast, setShowSuccessToast] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const totalDataSize = new Blob([exportData()]).size;
+
+  const analyzeImportData = (data: AppData): ImportAnalysis => {
+    const allFields = ['activities', 'items', 'records', 'purchaseItems', 'todos', 'preClaimants', 'materialTemplates'];
+    const missingFields: string[] = [];
+    const dataRecord = data as unknown as Record<string, unknown>;
+
+    allFields.forEach((field) => {
+      if (!Array.isArray(dataRecord[field])) {
+        missingFields.push(field);
+      }
+    });
+
+    const getCount = (field: string) => {
+      const arr = dataRecord[field];
+      return Array.isArray(arr) ? arr.length : 0;
+    };
+
+    return {
+      counts: {
+        activities: getCount('activities'),
+        items: getCount('items'),
+        records: getCount('records'),
+        purchaseItems: getCount('purchaseItems'),
+        todos: getCount('todos'),
+        preClaimants: getCount('preClaimants'),
+        materialTemplates: getCount('materialTemplates'),
+      },
+      currentCounts: {
+        activities: activities.length,
+        items: items.length,
+        records: records.length,
+        purchaseItems: purchaseItems.length,
+        todos: todos.length,
+        preClaimants: preClaimants.length,
+        materialTemplates: materialTemplates.length,
+      },
+      missingFields,
+    };
+  };
 
   const handleExport = () => {
     const data = exportData();
@@ -46,7 +129,9 @@ export const DataManagement: React.FC = () => {
         throw new Error('数据格式不正确');
       }
 
+      const analysis = analyzeImportData(parsedData);
       setImportPreview(parsedData);
+      setImportAnalysis(analysis);
       setImportError(null);
       setShowImportConfirm(true);
     } catch (err) {
@@ -69,6 +154,7 @@ export const DataManagement: React.FC = () => {
     }
     setShowImportConfirm(false);
     setImportPreview(null);
+    setImportAnalysis(null);
   };
 
   const handleClearData = () => {
@@ -267,44 +353,121 @@ export const DataManagement: React.FC = () => {
         onClose={() => {
           setShowImportConfirm(false);
           setImportPreview(null);
+          setImportAnalysis(null);
         }}
-        title="确认导入数据"
-        size="md"
+        title="导入数据预览"
+        size="lg"
       >
-        {importPreview && (
+        {importAnalysis && importPreview && (
           <>
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl mb-4">
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-4">
               <div className="flex items-start gap-3">
-                <AlertTriangle className="text-blue-500 flex-shrink-0 mt-0.5" size={20} />
+                <AlertTriangle className="text-amber-500 flex-shrink-0 mt-0.5" size={20} />
                 <div>
-                  <p className="font-medium text-blue-800">将覆盖现有数据</p>
-                  <p className="text-sm text-blue-700">
-                    导入后，当前所有数据将被替换为文件中的数据。
+                  <p className="font-medium text-amber-800">当前本地数据将被覆盖</p>
+                  <p className="text-sm text-amber-700">
+                    导入后，当前所有数据将被替换为备份文件中的数据，此操作无法撤销。
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="text-center p-4 bg-pink-50 rounded-xl">
-                <p className="text-2xl font-bold text-gray-800">{importPreview.activities.length}</p>
-                <p className="text-sm text-gray-500">活动</p>
+            {importAnalysis.missingFields.length > 0 && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl mb-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="text-blue-500 flex-shrink-0 mt-0.5" size={20} />
+                  <div>
+                    <p className="font-medium text-blue-800">
+                      备份文件缺少 {importAnalysis.missingFields.length} 项新功能数据
+                    </p>
+                    <p className="text-sm text-blue-700 mb-2">
+                      以下字段在备份中不存在，导入后将使用默认空数组补齐：
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {importAnalysis.missingFields.map((field) => (
+                        <span
+                          key={field}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-blue-200 rounded-lg text-xs text-blue-700"
+                        >
+                          <span>{DATA_FIELD_LABELS[field]?.icon}</span>
+                          <span>{DATA_FIELD_LABELS[field]?.label || field}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="text-center p-4 bg-purple-50 rounded-xl">
-                <p className="text-2xl font-bold text-gray-800">{importPreview.items.length}</p>
-                <p className="text-sm text-gray-500">物资</p>
-              </div>
-              <div className="text-center p-4 bg-blue-50 rounded-xl">
-                <p className="text-2xl font-bold text-gray-800">{importPreview.records.length}</p>
-                <p className="text-sm text-gray-500">领取记录</p>
+            )}
+
+            <div className="mb-2">
+              <h3 className="text-sm font-medium text-gray-500 mb-3">数据详情对比</h3>
+              <div className="space-y-2">
+                {Object.entries(DATA_FIELD_LABELS).map(([field, info]) => {
+                  const importCount = importAnalysis.counts[field as keyof typeof importAnalysis.counts];
+                  const currentCount = importAnalysis.currentCounts[field as keyof typeof importAnalysis.currentCounts];
+                  const isMissing = importAnalysis.missingFields.includes(field);
+                  const diff = importCount - currentCount;
+
+                  return (
+                    <div
+                      key={field}
+                      className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
+                        isMissing
+                          ? 'bg-gray-50 border-gray-200'
+                          : 'bg-white border-gray-100 hover:border-pink-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">{info.icon}</span>
+                        <div>
+                          <p className="font-medium text-gray-800">{info.label}</p>
+                          {isMissing && (
+                            <p className="text-xs text-gray-400">备份中无此字段</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 text-sm">
+                        <div className="text-right">
+                          <p className="text-gray-400 text-xs">当前</p>
+                          <p className="font-medium text-gray-500">{currentCount}</p>
+                        </div>
+                        <div className="text-gray-300">→</div>
+                        <div className="text-right">
+                          <p className="text-gray-400 text-xs">导入后</p>
+                          <p className={`font-bold ${isMissing ? 'text-gray-400' : 'text-gray-800'}`}>
+                            {importCount}
+                          </p>
+                        </div>
+                        <div className="w-12 text-right">
+                          {!isMissing && diff !== 0 && (
+                            <span
+                              className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                diff > 0
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-red-100 text-red-700'
+                              }`}
+                            >
+                              {diff > 0 ? '+' : ''}
+                              {diff}
+                            </span>
+                          )}
+                          {!isMissing && diff === 0 && (
+                            <span className="text-xs text-gray-400">不变</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-3 mt-6">
               <button
                 onClick={() => {
                   setShowImportConfirm(false);
                   setImportPreview(null);
+                  setImportAnalysis(null);
                 }}
                 className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
               >
@@ -312,7 +475,7 @@ export const DataManagement: React.FC = () => {
               </button>
               <button
                 onClick={confirmImport}
-                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-medium hover:from-blue-600 hover:to-indigo-600 transition-all"
+                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-medium hover:from-blue-600 hover:to-indigo-600 transition-all shadow-lg shadow-blue-200"
               >
                 确认导入
               </button>
